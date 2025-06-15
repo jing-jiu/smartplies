@@ -1,0 +1,262 @@
+page {
+  background-color: #f5f7fa;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.index-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 20px; /* 减小底部padding，因为不再需要为自定义底部导航留空间 */
+  box-sizing: border-box;
+}
+
+/* 顶部操作栏 */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+}
+
+.actions {
+  display: flex;
+  gap: 30px;
+}
+
+.action-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 24px;
+}
+
+.action-text {
+  margin-top: 8px;
+  font-size: 24px;
+}
+
+/* 设备列表 */
+.device-list {
+  max-height: 800px; /* 设置最大高度，超出部分可滚动 */
+  overflow-y: auto;
+}
+
+/* 设备卡片 */
+.device-card {
+  margin: 20px 30px;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.device-card:active {
+  background-color: #f9f9f9;
+  transform: scale(0.98);
+}
+
+.device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.device-title {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.device-controls {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.device-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.device-settings:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.device-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.status-dot.online {
+  background-color: #52c41a;
+}
+
+.status-dot.offline {
+  background-color: #f5222d;
+}
+
+.status-text {
+  font-size: 28px;
+  color: #666;
+}
+
+/* 电源按钮 */
+.power-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5;
+  transition: all 0.3s ease;
+}
+
+.power-button.on {
+  background-color: #e6f7ff;
+  box-shadow: 0 0 8px rgba(24, 144, 255, 0.2);
+}
+
+.power-button:active {
+  transform: scale(0.9);
+}
+
+.device-info {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.device-details {
+  flex: 1;
+}
+
+.device-name {
+  font-size: 30px;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.device-sn {
+  font-size: 24px;
+  color: #999;
+  display: block;
+}
+
+/* 用电信息卡片 */
+.usage-card {
+  margin: 20px 30px;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.usage-header {
+  margin-bottom: 20px;
+}
+
+.usage-title {
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.usage-content {
+  display: flex;
+  align-items: baseline;
+}
+
+.usage-value {
+  font-size: 60px;
+  font-weight: 700;
+  color: #1890ff;
+}
+
+.usage-unit {
+  font-size: 28px;
+  color: #666;
+  margin-left: 10px;
+}
+
+/* NFC功能卡片 */
+.nfc-card {
+  margin: 20px 30px;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.nfc-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.nfc-title {
+  font-size: 32px;
+  font-weight: 600;
+  margin-left: 10px;
+}
+
+.nfc-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.nfc-button {
+  flex: 1;
+  border-radius: 8px;
+}
+
+/* 底部导航 */
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100px;
+  background-color: #fff;
+  display: flex;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.tab-text {
+  font-size: 24px;
+  margin-top: 8px;
+  color: #999;
+}
+
+.tab-item.active .tab-text {
+  color: #6190E8;
+}

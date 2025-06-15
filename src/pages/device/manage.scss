@@ -1,0 +1,167 @@
+page {
+  background-color: #f5f7fa;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.device-manage-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding-bottom: 20px;
+  box-sizing: border-box;
+}
+
+/* 顶部标题栏 */
+.header {
+  display: flex;
+  align-items: center;
+  padding: 20px 30px;
+  position: relative;
+}
+
+.back-button {
+  position: absolute;
+  left: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  z-index: 1;
+}
+
+.title {
+  flex: 1;
+  text-align: center;
+  font-size: 36px;
+  font-weight: 600;
+}
+
+/* 设置容器 */
+.settings-container {
+  padding: 0 30px;
+}
+
+/* 设置项 */
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.setting-label-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-label {
+  font-size: 32px;
+  font-weight: 500;
+}
+
+.setting-time {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.time-text {
+  font-size: 24px;
+  color: #999;
+  margin-left: 8px;
+}
+
+/* 滑块设置 */
+.slider-item {
+  padding: 30px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.slider-label {
+  font-size: 32px;
+  font-weight: 500;
+}
+
+.slider-value {
+  font-size: 28px;
+  color: #999;
+}
+
+/* 模式选择器 */
+.mode-selector {
+  padding: 30px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.mode-title {
+  font-size: 32px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 20px;
+}
+
+.mode-button {
+  flex: 1;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  font-size: 28px;
+  transition: all 0.3s ease;
+}
+
+.mode-button.active {
+  background-color: #6190E8;
+  color: #fff;
+}
+
+/* 延时选择器 */
+.delay-selector {
+  padding: 30px 0;
+}
+
+.delay-title {
+  font-size: 32px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.delay-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.delay-button {
+  flex: 1;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  font-size: 28px;
+  transition: all 0.3s ease;
+}
+
+.delay-button.active {
+  background-color: #6190E8;
+  color: #fff;
+}
