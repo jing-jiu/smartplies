@@ -163,7 +163,6 @@ const ProfileEdit = observer(() => {
     // 准备用户信息数据
     const userInfoData = {
       nickName: nickname,
-      avatarUrl: avatarFileID || avatarUrl
     };
     
     // 如果有上传新头像，使用fileID
@@ -184,6 +183,21 @@ const ProfileEdit = observer(() => {
         userStore.setLoggedIn(true);
         if (avatarUrl) {
           userStore.setAvatarUrl(avatarUrl);
+        }
+        
+        // 如果有新上传的头像fileID，需要获取临时URL用于显示
+        if (avatarFileID) {
+          Taro.cloud.getTempFileURL({
+            fileList: [avatarFileID],
+            success: (res) => {
+              if (res.fileList && res.fileList[0] && res.fileList[0].tempFileURL) {
+                userStore.setAvatarUrl(res.fileList[0].tempFileURL);
+              }
+            },
+            fail: (err) => {
+              console.error('获取头像临时URL失败:', err);
+            }
+          });
         }
         
         Taro.hideLoading();

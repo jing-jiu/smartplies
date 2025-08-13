@@ -28,24 +28,31 @@ exports.main = async (event, context) => {
   await ensureCollectionExists('users')
   const wxContext = cloud.getWXContext()
   
+  console.log('updateUserInfo 接收到的数据:', JSON.stringify(event))
+  console.log('用户 openid:', wxContext.OPENID)
+  
   try {
     // 检查用户是否已存在
     const userRecord = await db.collection('users').where({
       openid: wxContext.OPENID
     }).get()
+    
+    console.log('查询到的用户记录数量:', userRecord.data.length)
 
     if (userRecord.data.length > 0) {
       // 获取现有用户信息
       const existingUserInfo = userRecord.data[0].userInfo || {}
+      console.log('现有用户信息:', JSON.stringify(existingUserInfo))
       
       // 合并现有用户信息和新提供的信息
       const updatedUserInfo = {
         ...existingUserInfo,
         ...event
       }
+      console.log('合并后的用户信息:', JSON.stringify(updatedUserInfo))
       
       // 更新已有用户信息
-      return await db.collection('users').where({
+      const updateResult = await db.collection('users').where({
         openid: wxContext.OPENID
       }).update({
         data: {
@@ -53,9 +60,12 @@ exports.main = async (event, context) => {
           updatedAt: db.serverDate()
         }
       })
+      console.log('用户信息更新结果:', JSON.stringify(updateResult))
+      return updateResult
     } else {
       // 创建新用户记录
-      return await db.collection('users').add({
+      console.log('创建新用户，用户信息:', JSON.stringify(event))
+      const createResult = await db.collection('users').add({
         data: {
           openid: wxContext.OPENID,
           appid: wxContext.APPID,
@@ -65,6 +75,8 @@ exports.main = async (event, context) => {
           updatedAt: db.serverDate()
         }
       })
+      console.log('新用户创建结果:', JSON.stringify(createResult))
+      return createResult
     }
   } catch (error) {
     console.error('更新用户信息失败', error)

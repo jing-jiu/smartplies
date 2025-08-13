@@ -37,10 +37,81 @@ page {
   font-size: 24px;
 }
 
+/* 设备状态栏 */
+.device-status-bar {
+  margin: 0 30px 10px 30px;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-info {
+  flex: 1;
+}
+
+.status-label {
+  font-size: 24px;
+  color: #666;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.status-count {
+  font-size: 28px;
+  color: #333;
+  font-weight: 500;
+}
+
+.quick-connect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(24, 144, 255, 0.1);
+  padding: 8px 12px;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+
+.quick-connect:active {
+  background-color: rgba(24, 144, 255, 0.2);
+  transform: scale(0.95);
+}
+
+.quick-connect-text {
+  font-size: 22px;
+  color: #1890ff;
+}
+
 /* 设备列表 */
 .device-list {
   max-height: 800px; /* 设置最大高度，超出部分可滚动 */
   overflow-y: auto;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 30px;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 32px;
+  color: #999;
+  margin: 20px 0 10px 0;
+  font-weight: 500;
+}
+
+.empty-desc {
+  font-size: 26px;
+  color: #ccc;
+  line-height: 1.4;
 }
 
 /* 设备卡片 */
@@ -52,11 +123,21 @@ page {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   position: relative;
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .device-card:active {
   background-color: #f9f9f9;
   transform: scale(0.98);
+}
+
+.device-card.disconnected {
+  border: 2px dashed #1890ff;
+  background-color: #f6f9ff;
+}
+
+.device-card.disconnected:active {
+  background-color: #e6f4ff;
 }
 
 .device-header {
@@ -133,8 +214,17 @@ page {
   box-shadow: 0 0 8px rgba(24, 144, 255, 0.2);
 }
 
+.power-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .power-button:active {
   transform: scale(0.9);
+}
+
+.power-button.disabled:active {
+  transform: none;
 }
 
 .device-info {
@@ -161,6 +251,28 @@ page {
   font-size: 24px;
   color: #999;
   display: block;
+}
+
+.device-hint {
+  font-size: 22px;
+  color: #1890ff;
+  display: block;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.connect-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(24, 144, 255, 0.1);
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+.connect-text {
+  font-size: 20px;
+  color: #1890ff;
 }
 
 /* 用电信息卡片 */

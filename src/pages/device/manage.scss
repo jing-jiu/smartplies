@@ -9,6 +9,7 @@ page {
   flex-direction: column;
   min-height: 100vh;
   padding-bottom: 20px;
+  margin-top: 20px;
   box-sizing: border-box;
 }
 
@@ -18,6 +19,9 @@ page {
   align-items: center;
   padding: 20px 30px;
   position: relative;
+  background-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
 }
 
 .back-button {
@@ -29,6 +33,12 @@ page {
   width: 40px;
   height: 40px;
   z-index: 1;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.back-button:active {
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .title {
@@ -36,6 +46,28 @@ page {
   text-align: center;
   font-size: 36px;
   font-weight: 600;
+}
+
+/* 颜色选择器样式 */
+.picker-view {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  min-height: 40px;
+}
+
+.picker-text {
+  font-size: 28px;
+  color: #333;
+  flex: 1;
+}
+
+.picker-view:active {
+  background-color: #e9ecef;
 }
 
 /* 设置容器 */
@@ -50,6 +82,11 @@ page {
   align-items: center;
   padding: 30px 0;
   border-bottom: 1px solid #eee;
+  background-color: #fff;
+  border-radius: 16px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
 }
 
 .setting-label-container {
@@ -65,19 +102,51 @@ page {
 .setting-time {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   margin-top: 10px;
+  width: 100%;
 }
 
 .time-text {
   font-size: 24px;
-  color: #999;
+  color: #666;
   margin-left: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background-color: #f5f5f5;
+  min-width: 60px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.time-text:active {
+  background-color: #e0e0e0;
+}
+
+.time-separator {
+  font-size: 24px;
+  color: #666;
+  margin: 0 8px;
+  font-weight: 500;
 }
 
 /* 滑块设置 */
 .slider-item {
-  padding: 30px 0;
-  border-bottom: 1px solid #eee;
+  padding: 30px;
+  border-bottom: 0;
+  background-color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+/* 自定义滑块样式 */
+.at-slider__inner {
+  height: 6px !important;
+}
+
+.at-slider__track {
+  height: 6px !important;
 }
 
 .slider-header {
@@ -99,8 +168,12 @@ page {
 
 /* 模式选择器 */
 .mode-selector {
-  padding: 30px 0;
-  border-bottom: 1px solid #eee;
+  padding: 30px;
+  border-bottom: 0;
+  background-color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
 }
 
 .mode-title {
@@ -128,13 +201,17 @@ page {
 }
 
 .mode-button.active {
-  background-color: #6190E8;
+  background-color: #636AE8FF;
   color: #fff;
 }
 
 /* 延时选择器 */
 .delay-selector {
-  padding: 30px 0;
+  padding: 30px;
+  background-color: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
 }
 
 .delay-title {
@@ -162,6 +239,37 @@ page {
 }
 
 .delay-button.active {
-  background-color: #6190E8;
+  background-color: #636AE8FF;
   color: #fff;
+}
+
+/* 底部按钮区域 */
+.bottom-buttons {
+  display: flex;
+  justify-content: space-between;
+  padding: 30px;
+  margin-top: 20px;
+  gap: 20px;
+}
+
+.back-button {
+  flex: 1;
+  height: 88px;
+  line-height: 88px;
+  font-size: 32px;
+  border-radius: 44px;
+  background-color: #f0f0f0;
+  color: #333;
+  border: none;
+}
+
+.save-button {
+  flex: 1;
+  height: 88px;
+  line-height: 88px;
+  font-size: 32px;
+  border-radius: 44px;
+  background-color: #636AE8FF;
+  color: #fff;
+  border: none;
 }

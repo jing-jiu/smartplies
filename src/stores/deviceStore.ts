@@ -1,4 +1,6 @@
 import { makeAutoObservable, action } from "mobx";
+import Taro from '@tarojs/taro';
+import { sendCommand } from '../services/bluetooth';
 
 export interface Device {
   id: string;
@@ -28,8 +30,23 @@ export class DeviceStore {
 
   constructor() {
     makeAutoObservable(this);
-    // 初始化测试设备
-    this.initTestDevices();
+    
+    // 尝试从云数据库加载设备
+    if (process.env.TARO_ENV === 'weapp') {
+      // 延迟执行，确保云环境已初始化
+      setTimeout(() => {
+        this.loadDevicesFromCloud().catch(err => {
+          // console.error('从云数据库加载设备失败，使用测试设备:', err);
+          // 如果从云端加载失败，使用测试设备
+          if (this.devices.length === 0) {
+            this.initTestDevices();
+          }
+        });
+      }, 2000);
+    } else {
+      // 非微信环境，使用测试设备
+      this.initTestDevices();
+    }
   }
 
   // 初始化测试设备数据
@@ -115,6 +132,14 @@ export class DeviceStore {
   }
 
   @action
+  updateDeviceSettings(id: string, settings: Partial<Device>) {
+    const device = this.devices.find(d => d.id === id);
+    if (device) {
+      Object.assign(device, settings);
+    }
+  }
+
+  @action
   setCurrentDevice(device: Device) {
     this.currentDevice = device;
   }
@@ -137,6 +162,11 @@ export class DeviceStore {
       device.monthlyUsage = monthlyUsage;
       device.yearlyUsage = yearlyUsage;
       this.lastUpdateTime = Date.now();
+      
+      // 同步更新到云数据库
+      this.syncDeviceToCloud(device).catch(err => {
+        console.error('同步设备用电量失败:', err);
+      });
     }
   }
 
@@ -159,12 +189,32 @@ export class DeviceStore {
 
   // 切换设备电源状态
   @action
-  toggleDevicePower(id: string) {
+  async toggleDevicePower(id: string) {
     const device = this.devices.find(d => d.id === id);
     if (device && device.connected) {
+      const oldPowerState = device.powerOn;
       device.powerOn = !device.powerOn;
       console.log(`设备 ${device.name} 电源状态: ${device.powerOn ? '开启' : '关闭'}`);
-      return true;
+      
+      try {
+        // 发送蓝牙命令
+        const command = device.powerOn ? 'CHARGE:1\\r\\n' : 'CHARGE:0\\r\\n';
+        console.log(`发送电源控制命令: ${command}`);
+        await sendCommand(device.deviceId, command);
+        console.log('电源控制命令发送成功');
+        
+        // 同步更新到云数据库
+        this.syncDeviceToCloud(device).catch(err => {
+          console.error('同步设备电源状态失败:', err);
+        });
+        
+        return true;
+      } catch (error) {
+        console.error('发送电源控制命令失败:', error);
+        // 如果蓝牙命令发送失败，回滚状态
+        device.powerOn = oldPowerState;
+        throw error;
+      }
     }
     return false;
   }
@@ -224,7 +274,96 @@ export class DeviceStore {
     // 添加到设备列表
     this.devices.push(newDevice);
     this.setCurrentDevice(newDevice);
+    
+    // 同步新设备到云数据库
+    this.syncDeviceToCloud(newDevice).catch(err => {
+      console.error('同步新设备失败:', err);
+    });
+    
     return newDevice;
+  }
+
+  // 同步设备信息到云数据库
+  @action
+  syncDeviceToCloud(device: Device) {
+    if (!Taro.cloud) {
+      console.error('云开发环境未初始化');
+      return Promise.reject('云开发环境未初始化');
+    }
+
+    return new Promise((resolve, reject) => {
+      console.log('正在同步设备信息到云数据库:', device.id);
+      console.log(device);
+      
+      Taro.cloud.callFunction({
+        name: 'syncDeviceInfo',
+        data: {
+          deviceInfo: device
+        },
+        success: (res: any) => {
+          console.log('设备信息同步成功:', res);
+          resolve(res);
+        },
+        fail: (err) => {
+          console.error('设备信息同步失败:', err);
+          reject(err);
+        }
+      });
+    });
+  }
+
+  // 同步所有设备信息到云数据库
+  @action
+  syncAllDevicesToCloud() {
+    if (this.devices.length === 0) {
+      console.log('没有设备需要同步');
+      return Promise.resolve();
+    }
+
+    const promises = this.devices.map(device => this.syncDeviceToCloud(device));
+    return Promise.all(promises);
+  }
+
+  // 从云数据库加载用户设备
+  @action
+  loadDevicesFromCloud() {
+    if (!Taro.cloud) {
+      console.error('云开发环境未初始化');
+      return Promise.reject('云开发环境未初始化');
+    }
+
+    return new Promise((resolve, reject) => {
+      console.log('正在从云数据库加载设备信息');
+      Taro.cloud.callFunction({
+        name: 'getUserDevices',
+        data: {},
+        success: (res: any) => {
+          console.log('设备信息加载成功:', res);
+          if (res.result && res.result.success && res.result.data) {
+            // 清空当前设备列表
+            this.devices = [];
+            
+            // 添加从云端获取的设备
+            res.result.data.forEach((deviceInfo: Device) => {
+              this.devices.push(deviceInfo);
+            });
+            
+            // 如果有设备，设置第一个为当前设备
+            if (this.devices.length > 0) {
+              this.setCurrentDevice(this.devices[0]);
+            }
+            
+            resolve(this.devices);
+          } else {
+            reject('获取设备信息失败');
+          }
+        },
+        fail: (err) => {
+          console.error('加载设备信息失败:', err);
+          reject(err);
+        }
+      });
+    });
   }
 }
 

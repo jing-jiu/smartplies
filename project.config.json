@@ -2,7 +2,7 @@
   "miniprogramRoot": "dist/",
   "projectname": "smartplies",
   "description": "智能充电桩",
-  "appid": "wx5bb130cfb50e6b36",
+  "appid": "wxef72876eb1351b48",
   "cloudfunctionRoot": "cloudfunctions/",
   "setting": {
     "urlCheck": true,

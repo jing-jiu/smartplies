@@ -13,7 +13,7 @@ class App extends Component<PropsWithChildren> {
         // 确保使用正确的云环境ID
         // 注意：云环境ID必须与微信开发者工具中创建的云环境ID一致
         // 如果没有创建云环境，请先在微信开发者工具中创建
-        const envId = 'cloud1-8gwb16pyf80af56b'
+        const envId = 'cloud1-7g2mv32w4abfdeca'
         
         console.log('正在初始化云环境:', envId)
         
@@ -28,6 +28,7 @@ class App extends Component<PropsWithChildren> {
         // 检查云函数是否已部署
         // 注意：云函数必须先在微信开发者工具中上传部署后才能调用
         console.log('请确保已在微信开发者工具中部署云函数')
+        console.log('确保cloudfunctions目录下有getUserInfo、updateUserInfo、getPhoneNumber、syncDeviceInfo和getUserDevices五个云函数')
         
         // 延迟调用云函数，确保云环境初始化完成
         setTimeout(() => {
@@ -55,7 +56,7 @@ class App extends Component<PropsWithChildren> {
               if (err.errMsg && err.errMsg.includes('FunctionName parameter could not be found')) {
                 console.error('可能原因: 云函数未部署或函数名称错误')
                 console.log('请在微信开发者工具中上传并部署云函数')
-                console.log('确保cloudfunctions目录下有getUserInfo、updateUserInfo和getPhoneNumber三个云函数')
+                console.log('确保cloudfunctions目录下有getUserInfo、updateUserInfo、getPhoneNumber、syncDeviceInfo和getUserDevices五个云函数')
               } else if (err.errCode === -501000) {
                 console.error('云函数调用失败，错误码: -501000')
                 console.log('可能原因: 云环境ID错误或云函数未部署')

@@ -32,6 +32,17 @@ const Profile = observer(() => {
             console.log('云数据库中存在用户信息:', dbUserInfo.userInfo);
             userStore.setLoggedIn(true);
             
+            // 尝试从云数据库加载用户的设备信息
+            try {
+              deviceStore.loadDevicesFromCloud().then(() => {
+                console.log('从云数据库加载设备信息成功');
+              }).catch(err => {
+                console.error('从云数据库加载设备信息失败:', err);
+              });
+            } catch (error) {
+              console.error('加载设备信息时发生错误:', error);
+            }
+            
             // 设置头像URL
             if (dbUserInfo.userInfo.avatarUrl) {
               // 检查是否是云存储的fileID
@@ -124,9 +135,7 @@ const Profile = observer(() => {
                   Taro.cloud.callFunction({
                     name: 'updateUserInfo',
                     data: {
-                      userInfo: {
-                        avatarUrl: fileID // 存储fileID而不是临时URL
-                      }
+                      avatarUrl: fileID // 存储fileID而不是临时URL
                     },
                     success: () => {
                       Taro.hideLoading();
@@ -294,11 +303,39 @@ const Profile = observer(() => {
   // 处理设备点击
   const handleDeviceClick = () => {
     if (deviceStore.devices.length > 0) {
-      Taro.showToast({
-        title: `您有 ${deviceStore.devices.length} 台设备`,
-        icon: 'none',
-        duration: 2000
+      // 显示加载提示
+      Taro.showLoading({
+        title: '同步设备信息...'
       });
+      
+      // 同步所有设备信息到云数据库
+      if (process.env.TARO_ENV === 'weapp' && userStore.hasLoggedIn) {
+        deviceStore.syncAllDevicesToCloud()
+          .then(() => {
+            Taro.hideLoading();
+            Taro.showToast({
+              title: `已同步 ${deviceStore.devices.length} 台设备`,
+              icon: 'success',
+              duration: 2000
+            });
+          })
+          .catch(err => {
+            console.error('同步设备信息失败:', err);
+            Taro.hideLoading();
+            Taro.showToast({
+              title: '同步设备信息失败',
+              icon: 'none',
+              duration: 2000
+            });
+          });
+      } else {
+        Taro.hideLoading();
+        Taro.showToast({
+          title: `您有 ${deviceStore.devices.length} 台设备`,
+          icon: 'none',
+          duration: 2000
+        });
+      }
     } else {
       Taro.showToast({
         title: '暂无设备',
@@ -356,13 +393,13 @@ const Profile = observer(() => {
 
       {/* 用户信息区域 */}
       <View className='info-section'>
-        <View className='info-item' onClick={handleAccountClick}>
+        {/* <View className='info-item' onClick={handleAccountClick}>
           <Text className='label'>我的账户</Text>
           <View className='function-right'>
             <Text className='value'>微信绑定</Text>
             <AtIcon value='chevron-right' size='18' color='#999'></AtIcon>
           </View>
-        </View>
+        </View> */}
 
         {/* 获取手机号按钮，仅在已登录但未绑定手机号时显示 */}
         {userStore.hasLoggedIn && (
