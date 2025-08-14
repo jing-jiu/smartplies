@@ -19,7 +19,8 @@ export const startDiscover = () => {
   return new Promise((resolve, reject) => {
     Taro.startBluetoothDevicesDiscovery({
       success: resolve,
-      fail: reject
+      fail: reject,
+      interval:0,
     });
   });
 };
