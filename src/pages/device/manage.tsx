@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { observer } from 'mobx-react';
 import { AtIcon, AtButton } from 'taro-ui';
 import { deviceStore } from '../../stores/deviceStore';
-import { sendCommand } from '../../services/bluetooth';
+import { sendCommand, disconnectBluetoothCompletely } from '../../services/bluetooth';
 import './manage.scss';
 
 // 颜色选项数组
@@ -323,6 +323,50 @@ const DeviceManage = observer(() => {
     return `#${f(0)}${f(8)}${f(4)}`;
   };
 
+  // 断开蓝牙连接
+  const handleDisconnectBluetooth = async () => {
+    if (!device) return;
+
+    Taro.showModal({
+      title: '提示',
+      content: '确定要断开蓝牙连接吗？',
+      success: async (res) => {
+        if (res.confirm) {
+          Taro.showLoading({
+            title: '断开连接中...'
+          });
+
+          try {
+            await disconnectBluetoothCompletely(device.deviceId);
+            
+            // 更新设备连接状态
+            deviceStore.updateDeviceSettings(device.id, { connected: false });
+            
+            Taro.hideLoading();
+            Taro.showToast({
+              title: '蓝牙已断开',
+              icon: 'success',
+              duration: 1500
+            });
+
+            // 延迟返回首页
+            setTimeout(() => {
+              handleBack();
+            }, 1500);
+          } catch (error) {
+            console.error('断开蓝牙失败:', error);
+            Taro.hideLoading();
+            Taro.showToast({
+              title: '断开连接失败',
+              icon: 'none',
+              duration: 2000
+            });
+          }
+        }
+      }
+    });
+  };
+
   // 保存设备设置并同步到云数据库
   const handleSaveSettings = async () => {
     if (!device) return;
@@ -477,7 +521,7 @@ const DeviceManage = observer(() => {
 
       {/* 底部按钮区域 */}
       <View className='bottom-buttons'>
-        {/* <AtButton className='back-button' onClick={handleBack}>返回</AtButton> */}
+        <AtButton className='disconnect-button' onClick={handleDisconnectBluetooth}>断开蓝牙</AtButton>
         <AtButton className='save-button' type='primary' onClick={handleSaveSettings}>保存设置</AtButton>
       </View>
     </View>

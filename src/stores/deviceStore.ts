@@ -27,6 +27,7 @@ export class DeviceStore {
   isBluetoothReady = false;
   discovering = false;
   lastUpdateTime: number = 0;
+  loading = false;
 
   constructor() {
     makeAutoObservable(this);
@@ -56,7 +57,7 @@ export class DeviceStore {
         id: 'test-device-001',
         name: '智能充电桩 1号',
         deviceId: 'test-device-id-001',
-        connected: true,
+        connected: false, // 初始状态为离线
         powerOn: true,
         mode: 1,
         currentVoltage: 220,
@@ -77,7 +78,7 @@ export class DeviceStore {
         id: 'test-device-002',
         name: '智能充电桩 2号',
         deviceId: 'test-device-id-002',
-        connected: true,
+        connected: false, // 初始状态为离线
         powerOn: false,
         mode: 2,
         currentVoltage: 220,
@@ -128,6 +129,8 @@ export class DeviceStore {
     const device = this.devices.find(d => d.id === id);
     if (device) {
       device.connected = connected;
+      // 连接状态改变时保存到本地存储
+      this.saveConnectionStates();
     }
   }
 
@@ -152,6 +155,11 @@ export class DeviceStore {
   @action
   toggleDiscovering() {
     this.discovering = !this.discovering;
+  }
+
+  @action
+  setLoading(loading: boolean) {
+    this.loading = loading;
   }
 
   @action
@@ -245,9 +253,26 @@ export class DeviceStore {
     // 检查设备是否已存在
     const existingDevice = this.findDeviceByDeviceId(deviceInfo.deviceId);
     if (existingDevice) {
-      // 如果设备已存在，更新连接状态
+      // 如果设备已存在，更新连接状态和设备信息
       this.updateDeviceStatus(existingDevice.id, true);
+      
+      // 更新设备名称（如果提供了新名称）
+      if (deviceInfo.name && deviceInfo.name !== existingDevice.name) {
+        existingDevice.name = deviceInfo.name;
+      }
+      
+      // 更新序列号（如果提供了新序列号）
+      if (deviceInfo.serialNumber && deviceInfo.serialNumber !== existingDevice.serialNumber) {
+        existingDevice.serialNumber = deviceInfo.serialNumber;
+      }
+      
       this.setCurrentDevice(existingDevice);
+      
+      // 同步更新到云数据库，确保重新激活被删除的设备
+      this.syncDeviceToCloud(existingDevice).catch(err => {
+        console.error('同步现有设备失败:', err);
+      });
+      
       return existingDevice;
     }
 
@@ -274,6 +299,9 @@ export class DeviceStore {
     // 添加到设备列表
     this.devices.push(newDevice);
     this.setCurrentDevice(newDevice);
+    
+    // 保存连接状态
+    this.saveConnectionStates();
     
     // 同步新设备到云数据库
     this.syncDeviceToCloud(newDevice).catch(err => {
@@ -324,6 +352,32 @@ export class DeviceStore {
     return Promise.all(promises);
   }
 
+  // 保存设备连接状态到本地存储
+  @action
+  saveConnectionStates() {
+    try {
+      const connectionStates = {};
+      this.devices.forEach(device => {
+        connectionStates[device.deviceId] = device.connected;
+      });
+      Taro.setStorageSync('deviceConnectionStates', connectionStates);
+    } catch (error) {
+      console.error('保存连接状态失败:', error);
+    }
+  }
+
+  // 从本地存储加载设备连接状态
+  @action
+  loadConnectionStates() {
+    try {
+      const connectionStates = Taro.getStorageSync('deviceConnectionStates') || {};
+      return connectionStates;
+    } catch (error) {
+      console.error('加载连接状态失败:', error);
+      return {};
+    }
+  }
+
   // 从云数据库加载用户设备
   @action
   loadDevicesFromCloud() {
@@ -331,6 +385,8 @@ export class DeviceStore {
       console.error('云开发环境未初始化');
       return Promise.reject('云开发环境未初始化');
     }
+
+    this.setLoading(true);
 
     return new Promise((resolve, reject) => {
       console.log('正在从云数据库加载设备信息');
@@ -340,12 +396,27 @@ export class DeviceStore {
         success: (res: any) => {
           console.log('设备信息加载成功:', res);
           if (res.result && res.result.success && res.result.data) {
-            // 清空当前设备列表
+            // 加载本地保存的连接状态
+            const connectionStates = this.loadConnectionStates();
+            
+            // 清空设备列表
             this.devices = [];
             
-            // 添加从云端获取的设备
-            res.result.data.forEach((deviceInfo: Device) => {
-              this.devices.push(deviceInfo);
+            // 添加从云端获取的设备，过滤掉已删除的设备，应用本地连接状态
+            const seenDevices = new Set();
+            res.result.data.forEach((deviceInfo: any) => {
+              // 只添加未删除的设备，并且去重
+              if (!deviceInfo.deleted && !seenDevices.has(deviceInfo.deviceId)) {
+                seenDevices.add(deviceInfo.deviceId);
+                
+                // 使用本地保存的连接状态
+                const connected = connectionStates[deviceInfo.deviceId] || false;
+                
+                this.devices.push({
+                  ...deviceInfo,
+                  connected: connected // 应用本地连接状态
+                });
+              }
             });
             
             // 如果有设备，设置第一个为当前设备
@@ -353,17 +424,87 @@ export class DeviceStore {
               this.setCurrentDevice(this.devices[0]);
             }
             
+            this.setLoading(false);
             resolve(this.devices);
           } else {
+            this.setLoading(false);
             reject('获取设备信息失败');
           }
         },
         fail: (err) => {
           console.error('加载设备信息失败:', err);
+          this.setLoading(false);
           reject(err);
         }
       });
     });
+  }
+
+  // 删除设备
+  @action
+  async deleteDevice(deviceId: string, forceLocal: boolean = false) {
+    const deviceIndex = this.devices.findIndex(d => d.id === deviceId);
+    if (deviceIndex === -1) {
+      throw new Error('设备不存在');
+    }
+
+    const device = this.devices[deviceIndex];
+    
+    // 如果不是强制本地删除，尝试同步到云数据库
+    if (!forceLocal && process.env.TARO_ENV === 'weapp' && Taro.cloud) {
+      try {
+        await new Promise((resolve, reject) => {
+          console.log('正在从云数据库删除设备:', device.id);
+          
+          Taro.cloud.callFunction({
+            name: 'syncDeviceInfo',
+            data: {
+              deviceInfo: {
+                ...device,
+                deleted: true, // 添加删除标记
+                deletedAt: new Date().toISOString() // 添加删除时间
+              },
+              operation: 'delete' // 添加操作类型
+            },
+            success: (res: any) => {
+              console.log('设备删除同步成功:', res);
+              // 确保从本地删除
+              this.devices.splice(deviceIndex, 1);
+              
+              // 如果删除的是当前设备，重新设置当前设备
+              if (this.currentDevice?.id === deviceId) {
+                this.currentDevice = this.devices.length > 0 ? this.devices[0] : null;
+              }
+              
+              console.log(`设备 ${device.name} 已删除`);
+              resolve(res);
+            },
+            fail: (err) => {
+              console.error('设备删除同步失败:', err);
+              reject(err);
+            }
+          });
+        });
+        console.log('设备已从云数据库删除');
+      } catch (error) {
+        console.error('从云数据库删除设备失败:', error);
+        // 云端删除失败，抛出错误让调用方处理
+        throw new Error('云端删除失败，请检查网络连接后重试');
+      }
+    } else {
+      // 从本地删除
+      this.devices.splice(deviceIndex, 1);
+      
+      // 如果删除的是当前设备，重新设置当前设备
+      if (this.currentDevice?.id === deviceId) {
+        this.currentDevice = this.devices.length > 0 ? this.devices[0] : null;
+      }
+      
+      // 清理本地存储的连接状态
+      this.saveConnectionStates();
+      
+      console.log(`设备 ${device.name} 已删除${forceLocal ? '（仅本地）' : ''}`);
+    }
   }
 }
 

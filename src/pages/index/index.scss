@@ -65,30 +65,29 @@ page {
   font-weight: 500;
 }
 
-.quick-connect {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background-color: rgba(24, 144, 255, 0.1);
-  padding: 8px 12px;
-  border-radius: 16px;
-  transition: all 0.3s ease;
-}
 
-.quick-connect:active {
-  background-color: rgba(24, 144, 255, 0.2);
-  transform: scale(0.95);
-}
-
-.quick-connect-text {
-  font-size: 22px;
-  color: #1890ff;
-}
 
 /* 设备列表 */
 .device-list {
   max-height: 800px; /* 设置最大高度，超出部分可滚动 */
   overflow-y: auto;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 30px;
+  text-align: center;
+}
+
+.loading-title {
+  font-size: 32px;
+  color: #1890ff;
+  margin: 20px 0 10px 0;
+  font-weight: 500;
 }
 
 /* 空状态 */
@@ -126,18 +125,19 @@ page {
   cursor: pointer;
 }
 
+.device-card.clickable {
+  border: 2px solid transparent;
+}
+
+.device-card.clickable:hover {
+  border-color: rgba(24, 144, 255, 0.3);
+  box-shadow: 0 6px 16px rgba(24, 144, 255, 0.1);
+}
+
 .device-card:active {
-  background-color: #f9f9f9;
-  transform: scale(0.98);
-}
-
-.device-card.disconnected {
-  border: 2px dashed #1890ff;
   background-color: #f6f9ff;
-}
-
-.device-card.disconnected:active {
-  background-color: #e6f4ff;
+  transform: scale(0.98);
+  border-color: #1890ff;
 }
 
 .device-header {
@@ -259,21 +259,10 @@ page {
   display: block;
   margin-top: 8px;
   font-style: italic;
+  opacity: 0.8;
 }
 
-.connect-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background-color: rgba(24, 144, 255, 0.1);
-  padding: 4px 8px;
-  border-radius: 12px;
-}
 
-.connect-text {
-  font-size: 20px;
-  color: #1890ff;
-}
 
 /* 用电信息卡片 */
 .usage-card {

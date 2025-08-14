@@ -263,6 +263,21 @@ page {
   border: none;
 }
 
+.disconnect-button {
+  flex: 1;
+  height: 88px;
+  line-height: 88px;
+  font-size: 32px;
+  border-radius: 44px;
+  background-color: #ff4d4f;
+  color: #fff;
+  border: none;
+}
+
+.disconnect-button:active {
+  background-color: #ff7875;
+}
+
 .save-button {
   flex: 1;
   height: 88px;

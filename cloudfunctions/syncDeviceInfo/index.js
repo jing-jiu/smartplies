@@ -2,132 +2,124 @@
 const cloud = require('wx-server-sdk')
 
 cloud.init({
-  env: cloud.DYNAMIC_CURRENT_ENV
+  env: cloud.DYNAMIC_CURRENT_ENV // 使用当前云环境
 })
 
 const db = cloud.database()
-const _ = db.command
-
-async function ensureCollectionExists(collectionName) {
-  try {
-    // 尝试获取集合信息
-    await db.collection(collectionName).limit(1).get()
-  } catch (error) {
-    if (error.errCode === -502005) {
-      // 集合不存在，创建集合
-      await db.createCollection(collectionName)
-      console.log(`集合 ${collectionName} 已创建`)
-    } else {
-      throw error
-    }
-  }
-}
 
 // 云函数入口函数
 exports.main = async (event, context) => {
-  // 确保必要的集合存在
-  await ensureCollectionExists('users')
-  await ensureCollectionExists('devices')
-  await ensureCollectionExists('user_device_mapping')
-  
-  const wxContext = cloud.getWXContext()
-  const { deviceInfo } = event
-  
-  if (!deviceInfo || !deviceInfo.id) {
-    return {
-      success: false,
-      error: '设备信息不完整'
-    }
-  }
+  const { deviceInfo, operation } = event
   
   try {
-    console.log('开始同步设备信息:', deviceInfo)
+    console.log('收到设备同步请求:', { deviceInfo, operation })
     
-    // 1. 更新或创建设备信息
-    const deviceRecord = await db.collection('devices').where({
-      deviceId: deviceInfo.deviceId
-    }).get()
+    // 获取用户openid
+    const { OPENID } = cloud.getWXContext()
     
-    console.log('查询到的设备记录:', deviceRecord.data)
-    
-    let deviceDbId
-    
-    if (deviceRecord.data.length > 0) {
-      // 更新已有设备信息
-      console.log('更新已有设备，设备ID:', deviceRecord.data[0]._id)
-      
-      // 排除_id字段，避免更新错误
-      const { _id, ...updateData } = deviceInfo
-      
-      const updateResult = await db.collection('devices').doc(deviceRecord.data[0]._id).update({
+    if (operation === 'delete') {
+      // 删除操作：标记所有相同deviceId的设备为已删除
+      const result = await db.collection('devices').where({
+        _openid: OPENID,
+        deviceId: deviceInfo.deviceId
+      }).update({
         data: {
-          ...updateData,
-          updatedAt: db.serverDate()
+          deleted: true,
+          deletedAt: new Date(),
+          updatedAt: new Date()
         }
       })
-      console.log('设备更新结果:', updateResult)
-      deviceDbId = deviceRecord.data[0]._id
+      
+      console.log('设备删除标记成功:', result)
+      
+      return {
+        success: true,
+        message: '设备删除成功',
+        data: result
+      }
     } else {
-      // 创建新设备记录
-      console.log('创建新设备记录')
+      // 同步操作：更新或创建设备信息
+      const existingDevice = await db.collection('devices').where({
+        _openid: OPENID,
+        deviceId: deviceInfo.deviceId
+      }).get()
       
-      // 排除_id字段，避免创建错误
-      const { _id, ...createData } = deviceInfo
-      
-      const result = await db.collection('devices').add({
-        data: {
-          ...createData,
-          createdAt: db.serverDate(),
-          updatedAt: db.serverDate()
+      if (existingDevice.data.length > 0) {
+        // 检查现有设备是否被标记为删除
+        const existingDeviceData = existingDevice.data[0]
+        
+        if (existingDeviceData.deleted) {
+          console.log('发现已删除的设备，重新激活:', deviceInfo.deviceId)
+          // 如果设备之前被删除，重新激活它
+          const result = await db.collection('devices').where({
+            _openid: OPENID,
+            deviceId: deviceInfo.deviceId
+          }).update({
+            data: {
+              ...deviceInfo,
+              deleted: false, // 重新激活设备
+              deletedAt: null, // 清除删除时间
+              reactivatedAt: new Date(), // 记录重新激活时间
+              updatedAt: new Date()
+            }
+          })
+          
+          console.log('设备重新激活成功:', result)
+          
+          return {
+            success: true,
+            message: '设备重新激活成功',
+            data: result
+          }
+        } else {
+          // 更新现有设备
+          const result = await db.collection('devices').where({
+            _openid: OPENID,
+            deviceId: deviceInfo.deviceId
+          }).update({
+            data: {
+              ...deviceInfo,
+              deleted: false, // 确保不是删除状态
+              updatedAt: new Date()
+            }
+          })
+          
+          console.log('设备信息更新成功:', result)
+          
+          return {
+            success: true,
+            message: '设备信息更新成功',
+            data: result
+          }
         }
-      })
-      console.log('设备创建结果:', result)
-      deviceDbId = result._id
-    }
-    
-    // 2. 更新用户-设备映射关系
-    console.log('查询用户设备映射关系, openid:', wxContext.OPENID, 'deviceId:', deviceInfo.deviceId)
-    const mappingRecord = await db.collection('user_device_mapping').where({
-      openid: wxContext.OPENID,
-      deviceId: deviceInfo.deviceId
-    }).get()
-    
-    console.log('查询到的映射记录:', mappingRecord.data)
-    
-    if (mappingRecord.data.length > 0) {
-      // 更新已有映射
-      console.log('更新已有映射关系')
-      const mappingUpdateResult = await db.collection('user_device_mapping').doc(mappingRecord.data[0]._id).update({
-        data: {
-          updatedAt: db.serverDate()
+      } else {
+        // 创建新设备
+        const result = await db.collection('devices').add({
+          data: {
+            ...deviceInfo,
+            _openid: OPENID,
+            deleted: false,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        })
+        
+        console.log('设备信息创建成功:', result)
+        
+        return {
+          success: true,
+          message: '设备信息创建成功',
+          data: result
         }
-      })
-      console.log('映射关系更新结果:', mappingUpdateResult)
-    } else {
-      // 创建新映射
-      console.log('创建新映射关系')
-      const mappingCreateResult = await db.collection('user_device_mapping').add({
-        data: {
-          openid: wxContext.OPENID,
-          deviceId: deviceInfo.deviceId,
-          deviceDbId: deviceDbId,
-          createdAt: db.serverDate(),
-          updatedAt: db.serverDate()
-        }
-      })
-      console.log('映射关系创建结果:', mappingCreateResult)
-    }
-    
-    console.log('设备信息同步完成')
-    return {
-      success: true,
-      message: '设备信息同步成功'
+      }
     }
   } catch (error) {
-    console.error('同步设备信息失败', error)
+    console.error('设备同步失败:', error)
+    
     return {
       success: false,
-      error: error
+      message: '设备同步失败',
+      error: error.message
     }
   }
 }

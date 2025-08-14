@@ -1,13 +1,8 @@
 {
   "name": "getUserDevices",
   "version": "1.0.0",
-  "description": "获取用户绑定的所有设备信息",
+  "description": "获取用户设备列表",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "wx-server-sdk": "~2.6.3"
   }
