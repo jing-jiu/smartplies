@@ -3,21 +3,33 @@ import { useLoad, useDidShow, usePullDownRefresh, stopPullDownRefresh, showToast
 import { observer } from 'mobx-react';
 import { AtButton, AtIcon } from 'taro-ui';
 import { deviceStore } from '../../stores/deviceStore';
-import { connectToDevice, initBluetooth, startDiscover, stopDiscover, enableMessageReceiving, addMessageListener, removeMessageListener, setBLEMTU, getBLEMTU, disconnectDevice, resetBluetoothAdapter } from '../../services/bluetooth';
+import { bluetoothManager, BluetoothDeviceManager } from '../../services/bluetooth';
 import './index.scss';
 import Taro from '@tarojs/taro';
 
 const Index = observer(() => {
   // 页面加载时初始化蓝牙
-  useLoad(() => {
-    initBluetooth()
-      .then(() => {
-        deviceStore.setBluetoothReady(true);
-        console.log('蓝牙初始化成功');
-      })
-      .catch(err => {
-        console.error('蓝牙初始化失败', err);
+  useLoad(async () => {
+    try {
+      // 使用新的蓝牙管理器初始化
+      const deviceManager = bluetoothManager.getDeviceManager();
+      
+      // 设置设备发现回调
+      deviceManager.onDeviceFound((devices) => {
+        console.log('发现设备:', devices);
       });
+      
+      // 设置状态变化回调
+      deviceManager.onStateChange((state) => {
+        deviceStore.setBluetoothReady(state.available);
+        console.log('蓝牙状态变化:', state);
+      });
+      
+      deviceStore.setBluetoothReady(true);
+      console.log('蓝牙管理器初始化成功');
+    } catch (err) {
+      console.error('蓝牙管理器初始化失败', err);
+    }
   });
 
   // 每次页面显示时检查设备连接状态
@@ -163,7 +175,6 @@ const Index = observer(() => {
 
       // 检查蓝牙是否初始化
       if (!deviceStore.isBluetoothReady) {
-        await initBluetooth();
         deviceStore.setBluetoothReady(true);
       }
 
@@ -184,7 +195,7 @@ const Index = observer(() => {
       if (existingDevice) {
         console.log('发现已存在的设备，先断开连接:', existingDevice.name);
         try {
-          await disconnectDevice(existingDevice.deviceId);
+          await bluetoothManager.disconnectCurrentDevice();
           deviceStore.updateDeviceStatus(existingDevice.id, false);
           await new Promise(resolve => setTimeout(resolve, 2000));
         } catch (error) {
@@ -193,28 +204,9 @@ const Index = observer(() => {
         }
       }
 
-      // 开始搜索设备（增加重试机制）
-      let scanSearchAttempts = 0;
-      const maxScanSearchAttempts = 3;
-
-      const startScanSearchWithRetry = async () => {
-        try {
-          await startDiscover();
-          console.log(`开始扫码搜索设备 (尝试 ${scanSearchAttempts + 1}/${maxScanSearchAttempts})`);
-        } catch (error) {
-          console.error('启动扫码蓝牙搜索失败:', error);
-          scanSearchAttempts++;
-          if (scanSearchAttempts < maxScanSearchAttempts) {
-            console.log(`扫码搜索失败，${2000}ms后重试...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            return startScanSearchWithRetry();
-          } else {
-            throw error;
-          }
-        }
-      };
-
-      await startScanSearchWithRetry();
+      // 开始搜索设备
+      await bluetoothManager.startSearch();
+      console.log('开始扫码搜索设备');
 
       let scanDeviceFound = false; // 添加标记避免重复处理
 
@@ -222,7 +214,7 @@ const Index = observer(() => {
       const scanTimeout = setTimeout(async () => {
         if (!scanDeviceFound) {
           try {
-            await stopDiscover();
+            await bluetoothManager.stopSearch();
             Taro.hideLoading();
             const searchTarget = macAddress ? `MAC地址为${macAddress}` : `设备名称为${deviceName}`;
             showToast({
@@ -236,13 +228,16 @@ const Index = observer(() => {
         }
       }, 15000); // 15秒超时
 
-      // 监听发现的设备
-      const scanDeviceFoundHandler = (res) => {
+      // 设置设备发现回调
+      const deviceManager = bluetoothManager.getDeviceManager();
+      const originalCallback = deviceManager.onDeviceFoundCallback;
+      
+      deviceManager.onDeviceFound((devices) => {
         if (scanDeviceFound) return; // 如果已经找到设备，不再处理
 
-        console.log('扫码搜索到设备:', res.devices.map(d => ({ name: d.name, deviceId: d.deviceId })));
+        console.log('扫码搜索到设备:', devices.map(d => ({ name: d.name, deviceId: d.deviceId })));
 
-        res.devices.forEach(async (discoveredDevice) => {
+        devices.forEach(async (discoveredDevice) => {
           let isMatch = false;
 
           if (macAddress) {
@@ -266,49 +261,15 @@ const Index = observer(() => {
               // 清除超时定时器
               clearTimeout(scanTimeout);
 
-              // 停止搜索
-              await stopDiscover();
-
-              // 移除事件监听器
-              Taro.offBluetoothDeviceFound(scanDeviceFoundHandler);
-
-              // 等待一段时间再连接，确保设备准备就绪
-              await new Promise(resolve => setTimeout(resolve, 1000));
-
               // 连接设备
-              await connectToDevice(discoveredDevice.deviceId);
+              const communicator = await bluetoothManager.connectDevice(discoveredDevice.deviceId, deviceName || discoveredDevice.name);
               console.log('扫码设备连接成功');
 
-              // 等待连接稳定
-              await new Promise(resolve => setTimeout(resolve, 1500));
-
-              // 设置MTU（提高连接稳定性）
-              try {
-                await setBLEMTU(discoveredDevice.deviceId, 230);
-                console.log('扫码设备MTU设置成功');
-                // 等待MTU设置生效
-                await new Promise(resolve => setTimeout(resolve, 500));
-              } catch (mtuError) {
-                console.log('扫码设备MTU设置失败，继续连接流程:', mtuError);
-              }
-
-              // 启用消息接收
-              try {
-                await enableMessageReceiving(discoveredDevice.deviceId);
-                console.log('扫码设备消息接收已启用');
-
-                // 添加消息监听器
-                const messageHandler = (deviceId: string, message: string) => {
-                  console.log(`收到来自扫码设备 ${deviceId} 的消息:`, message);
-                  handleDeviceMessage(deviceId, message);
-                };
-
-                addMessageListener(messageHandler);
-                console.log('扫码设备消息监听器已添加');
-              } catch (error) {
-                console.error('启用扫码设备消息接收失败:', error);
-                // 消息接收失败不影响设备连接
-              }
+              // 设置消息接收回调
+              communicator.onMessage((message) => {
+                console.log(`收到来自扫码设备的消息:`, message);
+                handleDeviceMessage(discoveredDevice.deviceId, message);
+              });
 
               // 添加设备到设备列表
               const newDevice = deviceStore.addAndConnectDevice({
@@ -330,7 +291,7 @@ const Index = observer(() => {
                 duration: 2000
               });
 
-              // 确保设备信息同步到云数据库（addAndConnectDevice已经会自动同步，这里再次确保）
+              // 确保设备信息同步到云数据库
               if (process.env.TARO_ENV === 'weapp') {
                 try {
                   await deviceStore.syncDeviceToCloud(newDevice);
@@ -352,13 +313,15 @@ const Index = observer(() => {
                 icon: 'none',
                 duration: 3000
               });
+            } finally {
+              // 恢复原始回调
+              if (originalCallback) {
+                deviceManager.onDeviceFound(originalCallback);
+              }
             }
           }
         });
-      };
-
-      // 绑定设备发现事件
-      Taro.onBluetoothDeviceFound(scanDeviceFoundHandler);
+      });
 
     } catch (error) {
       console.error('扫码充电失败:', error);
@@ -379,83 +342,19 @@ const Index = observer(() => {
     console.log('扫码充电');
 
     // 显示选择菜单：扫码或从相册选择
-    Taro.showActionSheet({
-      itemList: ['扫码', '从相册选择'],
-      success: (res) => {
-        if (res.tapIndex === 0) {
-          // 调用微信扫一扫API
-          Taro.scanCode({
-            onlyFromCamera: true, // 只允许从相机扫码
-            scanType: ['qrCode', 'barCode'], // 扫码类型
-            success: async (scanRes) => {
-              await handleScanResult(scanRes.result);
-            },
-            fail: (err) => {
-              console.error('扫码失败:', err);
-              showToast({
-                title: '扫码失败',
-                icon: 'none',
-                duration: 2000
-              });
-            }
-          });
-        } else {
-          // 从相册选择二维码图片
-          Taro.chooseImage({
-            count: 1,
-            sizeType: ['original', 'compressed'],
-            sourceType: ['album'],
-            success: async (chooseRes) => {
-              const tempFilePath = chooseRes.tempFilePaths[0];
-              console.log('选择的图片路径:', tempFilePath);
-
-              try {
-                // 显示加载提示
-                Taro.showLoading({
-                  title: '正在识别二维码...'
-                });
-
-                // 识别二维码
-                Taro.scanCode({
-                  onlyFromCamera: false, // 允许从图片识别
-                  scanType: ['qrCode', 'barCode'],
-                  success: async (scanRes) => {
-                    Taro.hideLoading();
-                    await handleScanResult(scanRes.result);
-                  },
-                  fail: (err) => {
-                    Taro.hideLoading();
-                    console.error('二维码识别失败:', err);
-                    showToast({
-                      title: '无法识别二维码，请选择清晰的二维码图片',
-                      icon: 'none',
-                      duration: 3000
-                    });
-                  }
-                });
-              } catch (error) {
-                Taro.hideLoading();
-                console.error('处理图片失败:', error);
-                showToast({
-                  title: '处理图片失败',
-                  icon: 'none',
-                  duration: 2000
-                });
-              }
-            },
-            fail: (err) => {
-              console.error('选择图片失败:', err);
-              showToast({
-                title: '选择图片失败',
-                icon: 'none',
-                duration: 2000
-              });
-            }
-          });
-        }
+    Taro.scanCode({
+      onlyFromCamera: false, // 只允许从相机扫码
+      scanType: ['qrCode', 'barCode'], // 扫码类型
+      success: async (scanRes) => {
+        await handleScanResult(scanRes.result);
       },
       fail: (err) => {
-        console.error('显示选择菜单失败:', err);
+        console.error('扫码失败:', err);
+        showToast({
+          title: '扫码失败',
+          icon: 'none',
+          duration: 2000
+        });
       }
     });
   };
@@ -512,11 +411,11 @@ const Index = observer(() => {
     });
 
     try {
-      // 确保设备处于断开状态并重置蓝牙适配器
-      console.log('确保设备处于断开状态并重置蓝牙适配器');
+      // 确保设备处于断开状态
+      console.log('确保设备处于断开状态');
       try {
         // 先断开设备连接
-        await disconnectDevice(device.deviceId);
+        await bluetoothManager.disconnectCurrentDevice();
         console.log('设备已断开连接');
         // 更新设备状态为离线
         deviceStore.updateDeviceStatus(device.id, false);
@@ -528,70 +427,24 @@ const Index = observer(() => {
         console.log('断开设备连接失败或设备本来就是断开状态:', error);
       }
 
-      // 强制重置蓝牙适配器以清除缓存
+      // 重置蓝牙管理器
       try {
-        await resetBluetoothAdapter();
+        await bluetoothManager.reset();
         deviceStore.setBluetoothReady(true);
-        console.log('蓝牙适配器重置成功，准备开始搜索');
+        console.log('蓝牙管理器重置成功，准备开始搜索');
       } catch (error) {
-        console.error('蓝牙适配器重置失败:', error);
-        // 如果重置失败，尝试简单的重新初始化
-        try {
-          await initBluetooth();
-          deviceStore.setBluetoothReady(true);
-          console.log('蓝牙适配器简单重新初始化成功');
-        } catch (initError) {
-          console.error('蓝牙初始化完全失败:', initError);
-          throw initError;
-        }
+        console.error('蓝牙管理器重置失败:', error);
+        deviceStore.setBluetoothReady(true);
       }
 
-      // 开始搜索设备（增加重试机制）
-      let searchAttempts = 0;
-      const maxSearchAttempts = 3;
+      // 开始搜索设备
+      await bluetoothManager.startSearch();
+      console.log('开始搜索设备进行连接');
 
-      const startSearchWithRetry = async () => {
-        try {
-          // 每次搜索前都先停止之前的搜索
-          try {
-            await stopDiscover();
-            await new Promise(resolve => setTimeout(resolve, 500));
-          } catch (error) {
-            console.log('停止之前的搜索:', error);
-          }
-
-          await startDiscover();
-          console.log(`开始搜索设备进行连接 (尝试 ${searchAttempts + 1}/${maxSearchAttempts})`);
-        } catch (error) {
-          console.error('启动蓝牙搜索失败:', error);
-          searchAttempts++;
-          if (searchAttempts < maxSearchAttempts) {
-            console.log(`搜索失败，${3000}ms后重试...`);
-
-            // 重试前重置蓝牙适配器
-            try {
-              await resetBluetoothAdapter();
-              deviceStore.setBluetoothReady(true);
-              console.log('重试前蓝牙适配器重置成功');
-            } catch (resetError) {
-              console.error('重试前蓝牙适配器重置失败:', resetError);
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            return startSearchWithRetry();
-          } else {
-            throw error;
-          }
-        }
-      };
-
-      await startSearchWithRetry();
-
-      // 设置更长的连接超时时间
+      // 设置连接超时时间
       const connectTimeout = setTimeout(async () => {
         try {
-          clearInterval(restartSearchInterval); // 清理搜索重启定时器
-          await stopDiscover();
+          await bluetoothManager.stopSearch();
           Taro.hideLoading();
           showToast({
             title: `连接 ${device.name} 超时`,
@@ -601,33 +454,20 @@ const Index = observer(() => {
         } catch (error) {
           console.error('停止搜索失败:', error);
         }
-      }, 30000); // 增加到30秒超时
+      }, 30000); // 30秒超时
 
       let deviceFound = false; // 添加标记避免重复处理
 
-      // 定期重新启动搜索以提高发现概率
-      const restartSearchInterval = setInterval(async () => {
-        if (!deviceFound) {
-          try {
-            console.log('重新启动蓝牙搜索以提高发现概率');
-            await stopDiscover();
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await startDiscover();
-          } catch (error) {
-            console.error('重新启动搜索失败:', error);
-          }
-        } else {
-          clearInterval(restartSearchInterval);
-        }
-      }, 8000); // 每8秒重新启动一次搜索
-
-      // 监听发现的设备
-      const deviceFoundHandler = (res) => {
+      // 设置设备发现回调
+      const deviceManager = bluetoothManager.getDeviceManager();
+      const originalCallback = deviceManager.onDeviceFoundCallback;
+      
+      deviceManager.onDeviceFound(async (devices) => {
         if (deviceFound) return; // 如果已经找到设备，不再处理
 
-        console.log('搜索到设备:', res.devices.map(d => ({ name: d.name, deviceId: d.deviceId })));
+        console.log('搜索到设备:', devices.map(d => ({ name: d.name, deviceId: d.deviceId })));
 
-        res.devices.forEach(async (discoveredDevice) => {
+        for (const discoveredDevice of devices) {
           // 检查是否是目标设备（支持多种匹配方式）
           const normalizeDeviceId = (id) => {
             if (!id) return '';
@@ -659,53 +499,18 @@ const Index = observer(() => {
             console.log('发现目标设备:', discoveredDevice.name, discoveredDevice.deviceId);
 
             try {
-              // 清除超时定时器和搜索重启定时器
+              // 清除超时定时器
               clearTimeout(connectTimeout);
-              clearInterval(restartSearchInterval);
-
-              // 停止搜索
-              await stopDiscover();
-
-              // 移除事件监听器
-              Taro.offBluetoothDeviceFound(deviceFoundHandler);
-
-              // 等待一段时间再连接，确保设备准备就绪
-              await new Promise(resolve => setTimeout(resolve, 1000));
 
               // 连接设备
-              await connectToDevice(discoveredDevice.deviceId);
+              const communicator = await bluetoothManager.connectDevice(discoveredDevice.deviceId, device.name);
               console.log('设备连接成功:', device.name);
 
-              // 等待连接稳定
-              await new Promise(resolve => setTimeout(resolve, 1500));
-
-              // 设置MTU（提高连接稳定性）
-              try {
-                await setBLEMTU(discoveredDevice.deviceId, 230);
-                console.log('MTU设置成功');
-                // 等待MTU设置生效
-                await new Promise(resolve => setTimeout(resolve, 500));
-              } catch (mtuError) {
-                console.log('MTU设置失败，继续连接流程:', mtuError);
-              }
-
-              // 启用消息接收
-              try {
-                await enableMessageReceiving(discoveredDevice.deviceId);
-                console.log('消息接收已启用');
-
-                // 添加消息监听器
-                const messageHandler = (deviceId: string, message: string) => {
-                  console.log(`收到来自设备 ${deviceId} 的消息:`, message);
-                  handleDeviceMessage(deviceId, message);
-                };
-
-                addMessageListener(messageHandler);
-                console.log('消息监听器已添加');
-              } catch (error) {
-                console.error('启用消息接收失败:', error);
-                // 消息接收失败不影响设备连接
-              }
+              // 设置消息接收回调
+              communicator.onMessage((message) => {
+                console.log(`收到来自设备的消息:`, message);
+                handleDeviceMessage(discoveredDevice.deviceId, message);
+              });
 
               // 更新设备连接状态为在线
               deviceStore.updateDeviceStatus(device.id, true);
@@ -744,13 +549,16 @@ const Index = observer(() => {
                 icon: 'none',
                 duration: 3000
               });
+            } finally {
+              // 恢复原始回调
+              if (originalCallback) {
+                deviceManager.onDeviceFound(originalCallback);
+              }
             }
+            break; // 找到目标设备后退出循环
           }
-        });
-      };
-
-      // 绑定设备发现事件
-      Taro.onBluetoothDeviceFound(deviceFoundHandler);
+        }
+      });
 
     } catch (error) {
       console.error('搜索设备失败:', error);
@@ -810,7 +618,7 @@ const Index = observer(() => {
             // 如果设备已连接，先断开连接
             if (device.connected) {
               try {
-                await disconnectDevice(device.deviceId);
+                await bluetoothManager.disconnectCurrentDevice();
               } catch (error) {
                 console.log('断开设备连接失败:', error);
               }

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { observer } from 'mobx-react';
 import { AtIcon, AtButton } from 'taro-ui';
 import { deviceStore } from '../../stores/deviceStore';
-import { sendCommand, disconnectBluetoothCompletely } from '../../services/bluetooth';
+import { bluetoothManager } from '../../services/bluetooth';
 import './manage.scss';
 
 // 颜色选项数组
@@ -122,7 +122,7 @@ const DeviceManage = observer(() => {
         try {
           const command = value ? 'CHARGE:1\\r\\n' : 'CHARGE:0\\r\\n';
           console.log(`发送电源控制命令: ${command}`);
-          await sendCommand(device.deviceId, command);
+          await bluetoothManager.sendMessage(command);
           console.log('电源控制命令发送成功');
 
           Taro.showToast({
@@ -247,7 +247,7 @@ const DeviceManage = observer(() => {
         // 发送蓝牙指令
         const command = `SET_LED:${selectedColor.index}\\r\\n`;
         console.log(`发送LED颜色控制命令: ${command}`);
-        await sendCommand(device.deviceId, command);
+        await bluetoothManager.sendMessage(command);
         console.log('LED颜色控制命令发送成功');
 
         Taro.showToast({
@@ -285,7 +285,7 @@ const DeviceManage = observer(() => {
         try {
           const command = `SET_DEV_MODE:${mode}\\r\\n`;
           console.log(`发送模式切换命令: ${command}`);
-          await sendCommand(device.deviceId, command);
+          await bluetoothManager.sendMessage(command);
           console.log('模式切换命令发送成功');
 
           Taro.showToast({
@@ -337,7 +337,7 @@ const DeviceManage = observer(() => {
           });
 
           try {
-            await disconnectBluetoothCompletely(device.deviceId);
+            await bluetoothManager.disconnectCurrentDevice();
             
             // 更新设备连接状态
             deviceStore.updateDeviceSettings(device.id, { connected: false });

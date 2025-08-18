@@ -1,6 +1,6 @@
 import { makeAutoObservable, action } from "mobx";
 import Taro from '@tarojs/taro';
-import { sendCommand } from '../services/bluetooth';
+import { bluetoothManager } from '../services/bluetooth';
 
 export interface Device {
   id: string;
@@ -208,7 +208,7 @@ export class DeviceStore {
         // 发送蓝牙命令
         const command = device.powerOn ? 'CHARGE:1\\r\\n' : 'CHARGE:0\\r\\n';
         console.log(`发送电源控制命令: ${command}`);
-        await sendCommand(device.deviceId, command);
+        await bluetoothManager.sendMessage(command);
         console.log('电源控制命令发送成功');
         
         // 同步更新到云数据库

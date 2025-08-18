@@ -4,29 +4,97 @@ import Taro from "@tarojs/taro";
 const STANDARD_SERVICE_UUID = '55535343-FE7D-4AE5-8FA9-9FAFD205E455';
 const WRITE_CHARACTERISTIC_UUID = '49535343-8841-43F4-A8D4-ECBE34729BB3';
 const NOTIFY_CHARACTERISTIC_UUID = '49535343-1E4D-4BD9-BA61-23C647249616';
+const NOTIFY_SERVICE_UUID = '5833FF01-9B8B-5191-6142-22A4536EF123';
 
-export const initBluetooth = () => {
+// 蓝牙设备接口
+export interface BluetoothDevice {
+  deviceId: string;
+  name: string;
+  RSSI: number;
+  advertisData?: ArrayBuffer;
+  advertisServiceUUIDs?: string[];
+  localName?: string;
+  serviceData?: any;
+}
+
+// 蓝牙状态接口
+export interface BluetoothState {
+  searching: boolean;
+  available: boolean;
+  discovering: boolean;
+}
+
+// 连接状态接口
+export interface ConnectionState {
+  deviceId: string;
+  connected: boolean;
+}
+
+// 初始化蓝牙适配器
+export const initBluetooth = (): Promise<any> => {
   return new Promise((resolve, reject) => {
     Taro.openBluetoothAdapter({
       mode: 'central', // 明确指定为主机模式
-      success: resolve,
+      success: (res) => {
+        console.log('蓝牙适配器初始化成功:', res);
+        resolve(res);
+      },
+      fail: (err) => {
+        console.error('蓝牙适配器初始化失败:', err);
+        reject(err);
+      }
+    });
+  });
+};
+
+// 获取蓝牙适配器状态
+export const getBluetoothAdapterState = (): Promise<BluetoothState> => {
+  return new Promise((resolve, reject) => {
+    Taro.getBluetoothAdapterState({
+      success: (res) => {
+        resolve({
+          searching: res.discovering,
+          available: res.available,
+          discovering: res.discovering
+        });
+      },
       fail: reject
     });
   });
 };
 
-export const startDiscover = () => {
+// 开始搜索蓝牙设备
+export const startDiscover = (allowDuplicatesKey: boolean = false): Promise<any> => {
   return new Promise((resolve, reject) => {
     Taro.startBluetoothDevicesDiscovery({
-      success: resolve,
-      fail: reject,
-      interval:0,
+      allowDuplicatesKey,
+      interval: 0,
+      success: (res) => {
+        console.log('开始搜索蓝牙设备成功:', res);
+        resolve(res);
+      },
+      fail: (err) => {
+        console.error('开始搜索蓝牙设备失败:', err);
+        reject(err);
+      }
     });
   });
 };
 
-export const stopDiscover = () => {
-  return Taro.stopBluetoothDevicesDiscovery();
+// 停止搜索蓝牙设备
+export const stopDiscover = (): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    Taro.stopBluetoothDevicesDiscovery({
+      success: (res) => {
+        console.log('停止搜索蓝牙设备成功:', res);
+        resolve(res);
+      },
+      fail: (err) => {
+        console.error('停止搜索蓝牙设备失败:', err);
+        reject(err);
+      }
+    });
+  });
 };
 
 // 强制重置蓝牙适配器
@@ -66,18 +134,308 @@ export const resetBluetoothAdapter = async () => {
   }
 };
 
-export const getAvailableDevices = () => {
-  return Taro.getBluetoothDevices();
-};
-
-export const connectToDevice = (deviceId: string) => {
+// 获取已发现的蓝牙设备列表
+export const getAvailableDevices = (): Promise<{ devices: BluetoothDevice[] }> => {
   return new Promise((resolve, reject) => {
-    Taro.createBLEConnection({
-      deviceId,
-      success: resolve,
-      fail: reject
+    Taro.getBluetoothDevices({
+      success: (res) => {
+        console.log('获取蓝牙设备列表成功:', res);
+        resolve(res);
+      },
+      fail: (err) => {
+        console.error('获取蓝牙设备列表失败:', err);
+        reject(err);
+      }
     });
   });
+};
+
+// ArrayBuffer转十六进制字符串 (类似原代码中的buf2hex)
+export const arrayBufferToHex = (buffer: ArrayBuffer): string => {
+  const uint8Array = new Uint8Array(buffer);
+  return Array.from(uint8Array)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+// ArrayBuffer转字符串 (类似原代码中的buf2string)
+export const arrayBufferToString = (buffer: ArrayBuffer): string => {
+  const uint8Array = new Uint8Array(buffer);
+  let result = '';
+  for (let i = 0; i < uint8Array.length; i++) {
+    result += String.fromCharCode(uint8Array[i]);
+  }
+  return result;
+};
+
+// 字符串转ArrayBuffer
+export const stringToArrayBuffer = (str: string): ArrayBuffer => {
+  const buffer = new ArrayBuffer(str.length);
+  const dataView = new Uint8Array(buffer);
+  for (let i = 0; i < str.length; i++) {
+    dataView[i] = str.charCodeAt(i);
+  }
+  return buffer;
+};
+
+// 设备搜索管理类
+export class BluetoothDeviceManager {
+  private devicesList: BluetoothDevice[] = [];
+  private searching: boolean = false;
+  private onDeviceFoundCallback?: (devices: BluetoothDevice[]) => void;
+  private onStateChangeCallback?: (state: BluetoothState) => void;
+
+  constructor() {
+    this.setupEventListeners();
+  }
+
+  // 设置事件监听器
+  private setupEventListeners() {
+    // 监听蓝牙适配器状态变化
+    Taro.onBluetoothAdapterStateChange((res) => {
+      console.log('蓝牙适配器状态变化:', res);
+      this.searching = res.discovering;
+
+      if (this.onStateChangeCallback) {
+        this.onStateChangeCallback({
+          searching: res.discovering,
+          available: res.available,
+          discovering: res.discovering
+        });
+      }
+
+      if (!res.available) {
+        this.searching = false;
+        this.devicesList = [];
+      }
+    });
+
+    // 监听发现新设备
+    Taro.onBluetoothDeviceFound((res) => {
+      console.log('发现新设备:', res);
+      this.handleDeviceFound(res);
+    });
+  }
+
+  // 处理发现的设备
+  private handleDeviceFound(res: any) {
+    let devices: BluetoothDevice[] = [];
+
+    // 处理不同的返回格式
+    if (res.devices && Array.isArray(res.devices)) {
+      devices = res.devices;
+    } else if (res.deviceId) {
+      devices = [res];
+    } else if (Array.isArray(res)) {
+      devices = res;
+    }
+
+    devices.forEach(device => {
+      // 过滤设备名称 (只保留 'ai-thinker' 设备，类似原代码逻辑)
+      if (device.name !== 'ai-thinker') {
+        return;
+      }
+
+      // 检查设备是否已存在
+      const existingIndex = this.devicesList.findIndex(d => d.deviceId === device.deviceId);
+
+      if (existingIndex === -1) {
+        // 处理广播数据
+        if (device.advertisData) {
+          device.advertisData = device.advertisData;
+        }
+
+        this.devicesList.push(device);
+        console.log('添加新设备:', device);
+      } else {
+        // 更新现有设备信息
+        this.devicesList[existingIndex] = { ...this.devicesList[existingIndex], ...device };
+      }
+    });
+
+    // 通知设备列表更新
+    if (this.onDeviceFoundCallback) {
+      this.onDeviceFoundCallback([...this.devicesList]);
+    }
+  }
+
+  // 开始搜索设备
+  async startSearch(): Promise<void> {
+    try {
+      if (this.searching) {
+        await this.stopSearch();
+      }
+
+      // 重置蓝牙适配器
+      await this.resetAdapter();
+
+      // 初始化蓝牙
+      await initBluetooth();
+
+      // 获取蓝牙状态
+      await getBluetoothAdapterState();
+
+      // 开始搜索
+      await startDiscover(false);
+
+      this.searching = true;
+      this.devicesList = [];
+
+      console.log('开始搜索蓝牙设备');
+    } catch (error) {
+      console.error('开始搜索失败:', error);
+      this.searching = false;
+
+      // 显示错误提示
+      Taro.showModal({
+        title: '提示',
+        content: '请检查手机蓝牙是否打开',
+        showCancel: false
+      });
+
+      throw error;
+    }
+  }
+
+  // 停止搜索设备
+  async stopSearch(): Promise<void> {
+    try {
+      if (this.searching) {
+        await stopDiscover();
+        this.searching = false;
+        console.log('停止搜索蓝牙设备');
+      }
+    } catch (error) {
+      console.error('停止搜索失败:', error);
+      this.searching = false;
+    }
+  }
+
+  // 重置蓝牙适配器
+  private async resetAdapter(): Promise<void> {
+    try {
+      await new Promise<void>((resolve) => {
+        Taro.closeBluetoothAdapter({
+          complete: () => resolve()
+        });
+      });
+      console.log('蓝牙适配器已重置');
+    } catch (error) {
+      console.log('重置蓝牙适配器失败:', error);
+    }
+  }
+
+  // 连接设备
+  async connectDevice(deviceId: string): Promise<ConnectionState> {
+    try {
+      // 停止搜索
+      await this.stopSearch();
+
+      // 显示连接提示
+      Taro.showLoading({
+        title: '连接蓝牙设备中...'
+      });
+
+      // 创建连接
+      await new Promise((resolve, reject) => {
+        Taro.createBLEConnection({
+          deviceId,
+          success: resolve,
+          fail: reject
+        });
+      });
+
+      Taro.hideLoading();
+
+      // 显示连接成功提示
+      Taro.showToast({
+        title: '连接成功',
+        icon: 'success',
+        duration: 1000
+      });
+
+      console.log('设备连接成功:', deviceId);
+      return { deviceId, connected: true };
+    } catch (error) {
+      Taro.hideLoading();
+
+      // 显示连接失败提示
+      Taro.showModal({
+        title: '提示',
+        content: '连接失败',
+        showCancel: false
+      });
+
+      console.error('设备连接失败:', error);
+      throw error;
+    }
+  }
+
+  // 设置设备发现回调
+  onDeviceFound(callback: (devices: BluetoothDevice[]) => void) {
+    this.onDeviceFoundCallback = callback;
+  }
+
+  // 设置状态变化回调
+  onStateChange(callback: (state: BluetoothState) => void) {
+    this.onStateChangeCallback = callback;
+  }
+
+  // 获取当前设备列表
+  getDevicesList(): BluetoothDevice[] {
+    return [...this.devicesList];
+  }
+
+  // 获取搜索状态
+  isSearching(): boolean {
+    return this.searching;
+  }
+
+  // 清理资源
+  destroy() {
+    this.devicesList = [];
+    this.searching = false;
+    this.onDeviceFoundCallback = undefined;
+    this.onStateChangeCallback = undefined;
+  }
+}
+
+export const connectToDevice = async (deviceId: string) => {
+  try {
+    console.log('开始连接设备:', deviceId);
+    console.log('连接时设备ID格式:', typeof deviceId, '长度:', deviceId.length);
+
+    // 创建蓝牙连接
+    await new Promise((resolve, reject) => {
+      Taro.createBLEConnection({
+        deviceId,
+        success: resolve,
+        fail: reject
+      });
+    });
+
+    console.log('设备连接成功，开始发现服务信息...');
+
+    // 连接成功后立即发现并存储服务信息 - 这是必须的步骤
+    try {
+      const serviceInfo = await discoverAndStoreDeviceServices(deviceId);
+      console.log('服务信息发现完成:', serviceInfo);
+    } catch (error) {
+      console.error('服务信息发现失败，无法完成连接:', error);
+      // 服务发现失败时，断开连接并抛出错误
+      try {
+        await disconnectDevice(deviceId);
+      } catch (disconnectError) {
+        console.error('断开连接时出错:', disconnectError);
+      }
+      throw new Error(`服务信息发现失败: ${error.message}`);
+    }
+
+    return { deviceId, connected: true };
+  } catch (error) {
+    console.error('设备连接失败:', error);
+    throw error;
+  }
 };
 
 // 断开设备连接
@@ -95,7 +453,7 @@ export const disconnectDevice = (deviceId: string) => {
 export const disconnectBluetoothCompletely = async (deviceId?: string) => {
   try {
     console.log('开始完全断开蓝牙连接');
-    
+
     // 1. 停止蓝牙设备发现
     try {
       await stopDiscover();
@@ -109,16 +467,11 @@ export const disconnectBluetoothCompletely = async (deviceId?: string) => {
       try {
         await disconnectDevice(deviceId);
         console.log(`已断开设备连接: ${deviceId}`);
-        
-        // 清理设备的服务信息
-        deviceServiceMap.delete(deviceId);
         console.log(`已清理设备服务信息: ${deviceId}`);
       } catch (error) {
         console.log('断开设备连接失败:', error);
       }
     } else {
-      // 清理所有设备的服务信息
-      deviceServiceMap.clear();
       console.log('已清理所有设备服务信息');
     }
 
@@ -150,10 +503,10 @@ export const disconnectBluetoothCompletely = async (deviceId?: string) => {
 export const resetBluetoothState = async () => {
   try {
     console.log('开始重置蓝牙状态');
-    
+
     // 1. 停止发现
     await stopDiscover();
-    
+
     // 2. 关闭蓝牙适配器
     await new Promise((resolve) => {
       Taro.closeBluetoothAdapter({
@@ -161,13 +514,13 @@ export const resetBluetoothState = async () => {
         fail: resolve
       });
     });
-    
+
     // 3. 等待一段时间后重新初始化
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // 4. 重新初始化蓝牙
     await initBluetooth();
-    
+
     console.log('蓝牙状态重置完成');
     return true;
   } catch (error) {
@@ -217,14 +570,14 @@ type MessageCallback = (deviceId: string, message: string) => void;
 // 存储消息回调函数
 let messageCallbacks: MessageCallback[] = [];
 
-// 存储设备的服务和特征值信息
+// 全局存储当前设备的服务和特征值信息
 interface DeviceServiceInfo {
   serviceId: string;
   notifyCharacteristicId: string;
   writeCharacteristicId?: string;
 }
 
-const deviceServiceMap = new Map<string, DeviceServiceInfo>();
+let currentDeviceService: DeviceServiceInfo | null = null;
 
 // 添加消息监听器
 export const addMessageListener = (callback: MessageCallback) => {
@@ -260,6 +613,224 @@ export const removeMessageListener = (callback: MessageCallback) => {
 };
 
 // 启用蓝牙消息接收
+// 主动获取和存储设备服务信息
+export const discoverAndStoreDeviceServices = async (deviceId: string): Promise<DeviceServiceInfo> => {
+  return new Promise((resolve, reject) => {
+    console.log('开始发现设备服务信息:', deviceId);
+    console.log('发现服务时设备ID格式:', typeof deviceId, '长度:', deviceId.length);
+
+    // 获取设备服务
+    Taro.getBLEDeviceServices({
+      deviceId,
+      success: (servicesRes) => {
+        console.log('发现设备服务成功:', servicesRes.services.length);
+
+        if (servicesRes.services.length === 0) {
+          reject(new Error('设备没有可用的服务'));
+          return;
+        }
+
+        // 查找标准服务
+        const standardService = servicesRes.services.find(s => s.uuid === STANDARD_SERVICE_UUID);
+        const notifyService = servicesRes.services.find(s => s.uuid === NOTIFY_SERVICE_UUID);
+
+        // 优先处理标准服务
+        if (standardService) {
+          console.log('发现标准服务:', standardService.uuid);
+
+          // 获取标准服务的特征值
+          Taro.getBLEDeviceCharacteristics({
+            deviceId,
+            serviceId: standardService.uuid,
+            success: (characteristicsRes) => {
+              console.log('标准服务特征值:', characteristicsRes.characteristics);
+
+              // 查找可用的特征值
+              let notifyCharacteristic = characteristicsRes.characteristics.find(
+                c => c.uuid === NOTIFY_CHARACTERISTIC_UUID
+              );
+              let writeCharacteristic = characteristicsRes.characteristics.find(
+                c => c.uuid === WRITE_CHARACTERISTIC_UUID
+              );
+
+              // 如果没找到预定义的特征值，根据属性查找
+              if (!notifyCharacteristic) {
+                notifyCharacteristic = characteristicsRes.characteristics.find(
+                  c => c.properties && (c.properties.notify || c.properties.indicate)
+                );
+              }
+
+              if (!writeCharacteristic) {
+                writeCharacteristic = characteristicsRes.characteristics.find(
+                  c => c.properties && (c.properties.write || c.properties.writeNoResponse)
+                );
+              }
+
+              // 如果还是没找到，使用索引方式
+              if (!writeCharacteristic && characteristicsRes.characteristics.length > 0) {
+                writeCharacteristic = characteristicsRes.characteristics[0];
+              }
+
+              if (!notifyCharacteristic && characteristicsRes.characteristics.length > 1) {
+                notifyCharacteristic = characteristicsRes.characteristics[1];
+              }
+
+              if (!writeCharacteristic) {
+                reject(new Error('标准服务中没有找到写入特征值'));
+                return;
+              }
+
+              const serviceInfo: DeviceServiceInfo = {
+                serviceId: standardService.uuid,
+                notifyCharacteristicId: notifyCharacteristic ? notifyCharacteristic.uuid : '',
+                writeCharacteristicId: writeCharacteristic.uuid
+              };
+
+              currentDeviceService = serviceInfo;
+              console.log('已存储发现的标准服务信息:', serviceInfo);
+              resolve(serviceInfo);
+            },
+            fail: reject
+          });
+        } else if (notifyService) {
+          console.log('发现通知服务:', notifyService.uuid);
+
+          // 获取通知服务的特征值
+          Taro.getBLEDeviceCharacteristics({
+            deviceId,
+            serviceId: notifyService.uuid,
+            success: (characteristicsRes) => {
+              console.log('通知服务特征值:', characteristicsRes.characteristics);
+
+              // 查找可用的特征值
+              let notifyCharacteristic = characteristicsRes.characteristics.find(
+                c => c.properties && (c.properties.notify || c.properties.indicate)
+              );
+              let writeCharacteristic = characteristicsRes.characteristics.find(
+                c => c.properties && (c.properties.write || c.properties.writeNoResponse)
+              );
+
+              // 如果没找到，使用索引方式
+              if (!notifyCharacteristic && characteristicsRes.characteristics.length > 0) {
+                notifyCharacteristic = characteristicsRes.characteristics[0];
+              }
+
+              if (!writeCharacteristic && characteristicsRes.characteristics.length > 1) {
+                writeCharacteristic = characteristicsRes.characteristics[1];
+              }
+
+              const serviceInfo: DeviceServiceInfo = {
+                serviceId: notifyService.uuid,
+                notifyCharacteristicId: notifyCharacteristic ? notifyCharacteristic.uuid : '',
+                writeCharacteristicId: writeCharacteristic ? writeCharacteristic.uuid : ''
+              };
+
+              currentDeviceService = serviceInfo;
+              console.log('已存储发现的通知服务信息:', serviceInfo);
+              resolve(serviceInfo);
+            },
+            fail: reject
+          });
+        } else {
+          // 使用倒数第三个服务（兼容原逻辑）
+          if (servicesRes.services.length < 3) {
+            // 如果服务数量不足3个，使用最后一个服务
+            const service = servicesRes.services[servicesRes.services.length - 1];
+            console.log('服务数量不足3个，使用最后一个服务:', service.uuid);
+
+            Taro.getBLEDeviceCharacteristics({
+              deviceId,
+              serviceId: service.uuid,
+              success: (characteristicsRes) => {
+                console.log('备用服务特征值:', characteristicsRes.characteristics);
+
+                if (characteristicsRes.characteristics.length === 0) {
+                  reject(new Error('服务没有可用的特征值'));
+                  return;
+                }
+
+                // 查找可用的特征值
+                let notifyCharacteristic = characteristicsRes.characteristics.find(
+                  c => c.properties && (c.properties.notify || c.properties.indicate)
+                );
+                let writeCharacteristic = characteristicsRes.characteristics.find(
+                  c => c.properties && (c.properties.write || c.properties.writeNoResponse)
+                );
+
+                // 如果没找到，使用索引方式
+                if (!writeCharacteristic) {
+                  writeCharacteristic = characteristicsRes.characteristics[0];
+                }
+
+                if (!notifyCharacteristic && characteristicsRes.characteristics.length > 1) {
+                  notifyCharacteristic = characteristicsRes.characteristics[1];
+                }
+
+                const serviceInfo: DeviceServiceInfo = {
+                  serviceId: service.uuid,
+                  notifyCharacteristicId: notifyCharacteristic ? notifyCharacteristic.uuid : '',
+                  writeCharacteristicId: writeCharacteristic ? writeCharacteristic.uuid : ''
+                };
+
+                currentDeviceService = serviceInfo;
+                console.log('已存储发现的备用服务信息:', serviceInfo);
+                resolve(serviceInfo);
+              },
+              fail: reject
+            });
+          } else {
+            const targetServiceIndex = servicesRes.services.length - 3;
+            const service = servicesRes.services[targetServiceIndex];
+            console.log('使用倒数第三个服务:', service.uuid);
+
+            Taro.getBLEDeviceCharacteristics({
+              deviceId,
+              serviceId: service.uuid,
+              success: (characteristicsRes) => {
+                console.log('倒数第三个服务特征值:', characteristicsRes.characteristics);
+
+                if (characteristicsRes.characteristics.length === 0) {
+                  reject(new Error('服务没有可用的特征值'));
+                  return;
+                }
+
+                // 查找可用的特征值
+                let notifyCharacteristic = characteristicsRes.characteristics.find(
+                  c => c.properties && (c.properties.notify || c.properties.indicate)
+                );
+                let writeCharacteristic = characteristicsRes.characteristics.find(
+                  c => c.properties && (c.properties.write || c.properties.writeNoResponse)
+                );
+
+                // 如果没找到，使用索引方式
+                if (!writeCharacteristic) {
+                  writeCharacteristic = characteristicsRes.characteristics[0];
+                }
+
+                if (!notifyCharacteristic && characteristicsRes.characteristics.length > 1) {
+                  notifyCharacteristic = characteristicsRes.characteristics[1];
+                }
+
+                const serviceInfo: DeviceServiceInfo = {
+                  serviceId: service.uuid,
+                  notifyCharacteristicId: notifyCharacteristic ? notifyCharacteristic.uuid : '',
+                  writeCharacteristicId: writeCharacteristic ? writeCharacteristic.uuid : ''
+                };
+
+                currentDeviceService = serviceInfo;
+                console.log('已存储发现的默认服务信息:', serviceInfo);
+                resolve(serviceInfo);
+              },
+              fail: reject
+            });
+          }
+        }
+      },
+      fail: reject
+    });
+  });
+};
+
 export const enableMessageReceiving = async (deviceId: string) => {
   await getBLEMTU(deviceId);
   setTimeout(async () => {
@@ -269,359 +840,581 @@ export const enableMessageReceiving = async (deviceId: string) => {
       console.log(error);
     }
   }, 1000);
-  return new Promise((resolve, reject) => {
-    console.log('开始启用蓝牙消息接收:', deviceId);
 
-    // 获取设备服务
-    Taro.getBLEDeviceServices({
-      deviceId,
-      success: (servicesRes) => {
-        console.log('获取设备服务成功:', servicesRes.services.length);
+  console.log('开始启用蓝牙消息接收:', deviceId);
 
-        if (servicesRes.services.length === 0) {
-          reject(new Error('设备没有可用的服务'));
-          return;
+  // 监听特征值变化
+  Taro.onBLECharacteristicValueChange((res) => {
+    if (currentDeviceService &&
+      res.deviceId === deviceId &&
+      res.serviceId === currentDeviceService.serviceId &&
+      res.characteristicId === currentDeviceService.notifyCharacteristicId) {
+
+      // 将接收到的数据转换为字符串
+      const message = arrayBufferToString(res.value);
+      // 调用所有注册的回调函数
+      messageCallbacks.forEach(callback => {
+        try {
+          callback(deviceId, message);
+        } catch (error) {
+          console.error('消息回调函数执行失败:', error);
         }
+      });
+    }
+  });
 
-        // 查找标准服务
-        const standardService = servicesRes.services.find(s => s.uuid === STANDARD_SERVICE_UUID);
+  // 检查当前设备服务信息
+  if (!currentDeviceService) {
+    console.log('未找到存储的服务信息，尝试重新发现服务...');
 
-        if (standardService) {
-          console.log('找到标准服务:', standardService.uuid);
+    // 如果没有存储的服务信息，重新发现服务
+    try {
+      const newServiceInfo = await discoverAndStoreDeviceServices(deviceId);
+      if (!newServiceInfo) {
+        throw new Error('无法获取设备服务信息');
+      }
 
-          // 获取标准服务的特征值
-          Taro.getBLEDeviceCharacteristics({
-            deviceId,
-            serviceId: standardService.uuid,
-            success: (characteristicsRes) => {
-              console.log('标准服务的特征值:', characteristicsRes.characteristics);
+      // 使用新发现的服务信息
+      console.log('使用新发现的服务信息:', newServiceInfo);
 
-              // 查找通知特征值
-              const notifyCharacteristic = characteristicsRes.characteristics.find(
-                c => c.uuid === NOTIFY_CHARACTERISTIC_UUID
-              );
+      if (!newServiceInfo.notifyCharacteristicId) {
+        throw new Error('设备不支持通知功能');
+      }
 
-              if (!notifyCharacteristic) {
-                reject(new Error('标准服务中没有找到通知特征值'));
-                return;
-              }
-
-              // 启用特征值变化通知
-              Taro.notifyBLECharacteristicValueChange({
-                deviceId,
-                serviceId: standardService.uuid,
-                characteristicId: notifyCharacteristic.uuid,
-                state: true,
-                success: () => {
-                  console.log('启用标准服务特征值通知成功');
-
-                  // 监听特征值变化
-                  Taro.onBLECharacteristicValueChange((res) => {
-                    if (res.deviceId === deviceId &&
-                      res.serviceId === standardService.uuid &&
-                      res.characteristicId === notifyCharacteristic.uuid) {
-
-                      // 将接收到的数据转换为字符串
-                      const message = arrayBufferToString(res.value);
-                      // 调用所有注册的回调函数
-                      messageCallbacks.forEach(callback => {
-                        try {
-                          callback(deviceId, message);
-                        } catch (error) {
-                          console.error('消息回调函数执行失败:', error);
-                        }
-                      });
-                    }
-                  });
-
-                  // 存储服务信息
-                  const serviceInfo: DeviceServiceInfo = {
-                    serviceId: standardService.uuid,
-                    notifyCharacteristicId: notifyCharacteristic.uuid,
-                    writeCharacteristicId: WRITE_CHARACTERISTIC_UUID
-                  };
-                  deviceServiceMap.set(deviceId, serviceInfo);
-                  
-                  resolve(serviceInfo);
-                },
-                fail: reject
-              });
-            },
-            fail: reject
-          });
-          return;
-        }
-
-        // 如果没有找到标准服务，使用原来的逻辑
-        console.log('未找到标准服务，使用默认服务选择逻辑');
-
-        // 检查是否有足够的服务（至少3个）
-        if (servicesRes.services.length < 3) {
-          reject(new Error('设备服务数量不足，无法使用倒数第三个服务'));
-          return;
-        }
-
-        // 使用倒数第三个服务
-        const targetServiceIndex = servicesRes.services.length - 3;
-        const service = servicesRes.services[targetServiceIndex];
-
-        console.log('找到的所有服务:', servicesRes.services.map((s, index) => ({
-          index: index + 1,
-          uuid: s.uuid,
-          isPrimary: s.isPrimary,
-          isTarget: index === targetServiceIndex
-        })));
-
-        console.log(`使用倒数第三个服务 (索引 ${targetServiceIndex + 1}): ${service.uuid}`);
-
-        // 获取目标服务的特征值
-        Taro.getBLEDeviceCharacteristics({
+      // 启用通知
+      await new Promise<void>((resolve, reject) => {
+        Taro.notifyBLECharacteristicValueChange({
           deviceId,
-          serviceId: service.uuid,
-          success: (characteristicsRes) => {
-            console.log(`倒数第三个服务 (${service.uuid}) 的特征值:`, characteristicsRes.characteristics.map(c => ({
-              uuid: c.uuid,
-              properties: c.properties
-            })));
-
-            // 使用第二个特征值来接收消息
-            if (characteristicsRes.characteristics.length < 2) {
-              reject(new Error(`倒数第三个服务中特征值数量不足，需要至少2个特征值`));
-              return;
-            }
-
-            const notifyCharacteristic = characteristicsRes.characteristics[1]; // 第二个特征值（索引1）
-
-            if (!notifyCharacteristic.properties.notify && !notifyCharacteristic.properties.indicate) {
-              reject(new Error(`倒数第三个服务的第二个特征值不支持通知功能`));
-              return;
-            }
-
-            console.log('在倒数第三个服务中使用第二个特征值接收消息:', {
-              serviceIndex: targetServiceIndex + 1,
-              serviceId: service.uuid,
-              characteristicId: notifyCharacteristic.uuid,
-              characteristicIndex: 2,
-              properties: notifyCharacteristic.properties
-            });
-
-            // 启用特征值变化通知
-            Taro.notifyBLECharacteristicValueChange({
-              deviceId,
-              serviceId: service.uuid,
-              characteristicId: notifyCharacteristic.uuid,
-              state: true,
-              success: () => {
-                console.log(`启用倒数第三个服务特征值通知成功`);
-
-                // 监听特征值变化
-                Taro.onBLECharacteristicValueChange((res) => {
-                  if (res.deviceId === deviceId &&
-                    res.serviceId === service.uuid &&
-                    res.characteristicId === notifyCharacteristic.uuid) {
-
-                    // 将接收到的数据转换为字符串
-                    const message = arrayBufferToString(res.value);
-                    // 调用所有注册的回调函数
-                    messageCallbacks.forEach(callback => {
-                      try {
-                        callback(deviceId, message);
-                      } catch (error) {
-                        console.error('消息回调函数执行失败:', error);
-                      }
-                    });
-                  }
-                });
-
-                // 存储服务信息
-                const serviceInfo: DeviceServiceInfo = {
-                  serviceId: service.uuid,
-                  notifyCharacteristicId: notifyCharacteristic.uuid,
-                  writeCharacteristicId: characteristicsRes.characteristics[0]?.uuid
-                };
-                deviceServiceMap.set(deviceId, serviceInfo);
-                
-                resolve(serviceInfo);
-              },
-              fail: (err) => {
-                console.error(`启用倒数第三个服务特征值通知失败:`, err);
-                reject(err);
-              }
-            });
-          },
-          fail: (err) => {
-            console.error(`获取倒数第三个服务 (${service.uuid}) 的特征值失败:`, err);
-            reject(err);
-          }
+          serviceId: newServiceInfo.serviceId,
+          characteristicId: newServiceInfo.notifyCharacteristicId,
+          state: true,
+          success: () => resolve(),
+          fail: reject
         });
-      },
-      fail: (err) => {
-        console.error('获取设备服务失败:', err);
-        reject(err);
+      });
+
+      console.log('已启用消息接收功能，使用新发现的服务');
+      return newServiceInfo;
+    } catch (error) {
+      console.error('重新发现服务失败:', error);
+      throw error;
+    }
+  }
+
+  console.log('使用已存储的服务信息:', currentDeviceService);
+
+  if (!currentDeviceService.notifyCharacteristicId) {
+    console.warn('设备不支持通知功能，跳过通知启用');
+    return currentDeviceService;
+  }
+
+  try {
+    // 启用通知
+    await new Promise<void>((resolve, reject) => {
+      Taro.notifyBLECharacteristicValueChange({
+        deviceId,
+        serviceId: currentDeviceService.serviceId,
+        characteristicId: currentDeviceService.notifyCharacteristicId,
+        state: true,
+        success: () => {
+          console.log('已启用消息接收功能，使用已存储的服务');
+          resolve();
+        },
+        fail: (error) => {
+          console.error('启用消息接收失败:', error);
+          reject(error);
+        }
+      });
+    });
+
+    return currentDeviceService;
+  } catch (error) {
+    console.error('启用消息接收失败:', error);
+    throw error;
+  }
+};
+
+// 设备通信管理类
+export class BluetoothDeviceCommunicator {
+  private deviceId: string;
+  private serviceId: string;
+  private writeCharacteristicId: string;
+  private notifyCharacteristicId: string;
+  private connected: boolean = false;
+  private receiveText: string = '';
+  private onMessageCallback?: (message: string) => void;
+  private onConnectionStateCallback?: (connected: boolean) => void;
+
+  constructor(
+    deviceId: string,
+    serviceId: string = STANDARD_SERVICE_UUID,
+    writeCharacteristicId: string = WRITE_CHARACTERISTIC_UUID,
+    notifyCharacteristicId: string = NOTIFY_CHARACTERISTIC_UUID
+  ) {
+    this.deviceId = deviceId;
+    this.serviceId = serviceId;
+    this.writeCharacteristicId = writeCharacteristicId;
+    this.notifyCharacteristicId = notifyCharacteristicId;
+    this.setupEventListeners();
+  }
+
+  // 设置事件监听器
+  private setupEventListeners() {
+    // 监听连接状态变化
+    Taro.onBLEConnectionStateChange((res) => {
+      console.log('连接状态变化:', res);
+      if (res.deviceId === this.deviceId) {
+        this.connected = res.connected;
+        if (this.onConnectionStateCallback) {
+          this.onConnectionStateCallback(res.connected);
+        }
       }
     });
-  });
-};
 
-// ArrayBuffer转字符串
-const arrayBufferToString = (buffer: ArrayBuffer): string => {
-  const uint8Array = new Uint8Array(buffer);
-  let result = '';
-  for (let i = 0; i < uint8Array.length; i++) {
-    result += String.fromCharCode(uint8Array[i]);
+    // 监听特征值变化 (接收消息)
+    Taro.onBLECharacteristicValueChange((res) => {
+      if (res.deviceId === this.deviceId &&
+        res.serviceId === this.serviceId &&
+        res.characteristicId === this.notifyCharacteristicId) {
+
+        const message = arrayBufferToString(res.value);
+        const time = this.getCurrentTime();
+        const fullMessage = time + message;
+
+        this.receiveText += fullMessage;
+        if (this.onMessageCallback) {
+          this.onMessageCallback(fullMessage);
+        }
+      }
+    });
   }
-  return result;
-};
 
-export const sendCommand = (deviceId: string, command: string) => {
-  return new Promise((resolve, reject) => {
-    // 首先检查是否已有存储的服务信息
-    const serviceInfo = deviceServiceMap.get(deviceId);
-    if (serviceInfo && serviceInfo.writeCharacteristicId) {
-      console.log('使用已存储的服务信息发送命令:', {
-        deviceId,
-        serviceId: serviceInfo.serviceId,
-        characteristicId: serviceInfo.writeCharacteristicId
+  // 初始化设备通信
+  async initialize(): Promise<void> {
+    try {
+      console.log('初始化设备通信:', this.deviceId);
+
+      // 获取设备服务
+      const servicesRes = await new Promise<any>((resolve, reject) => {
+        Taro.getBLEDeviceServices({
+          deviceId: this.deviceId,
+          success: resolve,
+          fail: reject
+        });
       });
-      
-      // 将命令字符串转换为ArrayBuffer
-      const buffer = new ArrayBuffer(command.length);
-      const dataView = new DataView(buffer);
-      for (let i = 0; i < command.length; i++) {
-        dataView.setUint8(i, command.charCodeAt(i));
+
+      console.log('设备服务:', servicesRes.services);
+
+      if (!servicesRes.services || servicesRes.services.length === 0) {
+        throw new Error('设备没有可用的服务');
       }
 
-      console.log(`准备通过标准服务发送命令:`, command, '转换为字节:', Array.from(new Uint8Array(buffer)));
+      // 查找标准服务或备用服务
+      let targetService = servicesRes.services.find((s: any) => s.uuid === STANDARD_SERVICE_UUID);
+      let targetNotifyService = servicesRes.services.find((s: any) => s.uuid === NOTIFY_SERVICE_UUID);
 
-      // 直接使用存储的服务和特征值写入数据
-      Taro.writeBLECharacteristicValue({
-        deviceId,
-        serviceId: serviceInfo.serviceId,
-        characteristicId: serviceInfo.writeCharacteristicId,
-        value: buffer,
+      let serviceToUse = null;
+      let characteristicsToUse = null;
+
+      // 优先使用标准服务
+      if (targetService) {
+        console.log('找到标准服务:', targetService.uuid);
+        serviceToUse = targetService;
+        characteristicsToUse = await this.getServiceCharacteristics(targetService.uuid);
+      } else if (targetNotifyService) {
+        console.log('找到通知服务:', targetNotifyService.uuid);
+        serviceToUse = targetNotifyService;
+        characteristicsToUse = await this.getServiceCharacteristics(targetNotifyService.uuid);
+      } else {
+        // 如果没有找到标准服务，尝试使用倒数第三个服务（兼容原逻辑）
+        if (servicesRes.services.length >= 3) {
+          const fallbackServiceIndex = servicesRes.services.length - 3;
+          serviceToUse = servicesRes.services[fallbackServiceIndex];
+          console.log('使用备用服务:', serviceToUse.uuid);
+          characteristicsToUse = await this.getServiceCharacteristics(serviceToUse.uuid);
+        } else {
+          throw new Error('设备服务不兼容');
+        }
+      }
+
+      if (!serviceToUse || !characteristicsToUse) {
+        throw new Error('无法获取设备服务信息');
+      }
+
+      // 更新服务和特征值信息
+      this.serviceId = serviceToUse.uuid;
+
+      // 查找可用的特征值
+      const { writeCharacteristic, notifyCharacteristic } = this.findUsableCharacteristics(characteristicsToUse);
+
+      if (writeCharacteristic) {
+        this.writeCharacteristicId = writeCharacteristic.uuid;
+        console.log('找到写入特征值:', writeCharacteristic.uuid);
+      }
+
+      if (notifyCharacteristic) {
+        this.notifyCharacteristicId = notifyCharacteristic.uuid;
+        console.log('找到通知特征值:', notifyCharacteristic.uuid);
+
+        // 启用通知
+        await this.enableNotificationForCharacteristic(this.serviceId, this.notifyCharacteristicId);
+      } else {
+        console.warn('未找到通知特征值，消息接收功能可能不可用');
+      }
+
+      this.connected = true;
+      console.log('设备通信初始化完成');
+      console.log('最终使用的服务ID:', this.serviceId);
+      console.log('最终使用的写入特征值ID:', this.writeCharacteristicId);
+      console.log('最终使用的通知特征值ID:', this.notifyCharacteristicId);
+    } catch (error) {
+      console.error('设备通信初始化失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取服务的特征值
+  private async getServiceCharacteristics(serviceId: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      Taro.getBLEDeviceCharacteristics({
+        deviceId: this.deviceId,
+        serviceId: serviceId,
         success: (res) => {
-          console.log(`通过标准服务发送命令成功:`, res);
-          resolve({
-            ...res,
-            serviceId: serviceInfo.serviceId,
-            characteristicId: serviceInfo.writeCharacteristicId,
-            usingStoredService: true
-          });
+          console.log(`服务 ${serviceId} 的特征值:`, res.characteristics);
+          resolve(res.characteristics);
         },
         fail: (err) => {
-          console.error(`通过标准服务发送命令失败:`, err);
+          console.error(`获取服务 ${serviceId} 特征值失败:`, err);
           reject(err);
         }
       });
-      return;
+    });
+  }
+
+  // 查找可用的特征值
+  private findUsableCharacteristics(characteristics: any[]) {
+    let writeCharacteristic = null;
+    let notifyCharacteristic = null;
+
+    // 优先查找预定义的特征值
+    writeCharacteristic = characteristics.find(c => c.uuid === WRITE_CHARACTERISTIC_UUID);
+    notifyCharacteristic = characteristics.find(c => c.uuid === NOTIFY_CHARACTERISTIC_UUID);
+
+    // 如果没找到预定义的，根据属性查找
+    if (!writeCharacteristic) {
+      writeCharacteristic = characteristics.find(c =>
+        c.properties && (c.properties.write || c.properties.writeNoResponse)
+      );
     }
 
-    console.log('未找到存储的服务信息，使用默认查找逻辑');
-    
-    // 查找设备的服务和特征值
-    Taro.getBLEDeviceServices({
-      deviceId,
-      success: (servicesRes) => {
-        console.log('获取设备服务成功:', servicesRes);
-        console.log('服务列表:', servicesRes.services.map(s => ({ uuid: s.uuid, isPrimary: s.isPrimary })));
+    if (!notifyCharacteristic) {
+      notifyCharacteristic = characteristics.find(c =>
+        c.properties && (c.properties.notify || c.properties.indicate)
+      );
+    }
 
-        if (servicesRes.services.length === 0) {
-          const error = new Error('设备没有可用的服务');
-          console.error(error);
-          reject(error);
-          return;
+    // 如果还是没找到，使用索引方式（兼容原逻辑）
+    if (!writeCharacteristic && characteristics.length > 0) {
+      writeCharacteristic = characteristics[0];
+    }
+
+    if (!notifyCharacteristic && characteristics.length > 1) {
+      notifyCharacteristic = characteristics[1];
+    }
+
+    console.log('选择的写入特征值:', writeCharacteristic);
+    console.log('选择的通知特征值:', notifyCharacteristic);
+
+    return { writeCharacteristic, notifyCharacteristic };
+  }
+
+  // 为指定特征值启用通知
+  private async enableNotificationForCharacteristic(serviceId: string, characteristicId: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      console.log(`启用通知 - 服务ID: ${serviceId}, 特征值ID: ${characteristicId}`);
+
+      Taro.notifyBLECharacteristicValueChange({
+        state: true,
+        deviceId: this.deviceId,
+        serviceId: serviceId,
+        characteristicId: characteristicId,
+        success: () => {
+          console.log('启用notify成功');
+          resolve();
+        },
+        fail: (err) => {
+          console.log('启用notify失败:', err);
+          reject(err);
         }
+      });
+    });
+  }
 
-        // 检查是否有足够的服务（至少3个）
-        if (servicesRes.services.length < 3) {
-          reject(new Error('设备服务数量不足，无法使用倒数第三个服务'));
-          return;
-        }
+  // 启用通知（废弃的方法，保留兼容性）
+  private async enableNotification(): Promise<void> {
+    return this.enableNotificationForCharacteristic(this.serviceId, this.notifyCharacteristicId);
+  }
 
-        // 使用倒数第三个服务
-        const targetServiceIndex = servicesRes.services.length - 3;
-        const service = servicesRes.services[targetServiceIndex];
+  // 发送消息
+  async sendMessage(message: string): Promise<void> {
+    if (!this.connected) {
+      throw new Error('蓝牙已断开');
+    }
 
-        console.log('查找可写服务，所有服务:', servicesRes.services.map((s, index) => ({
-          index: index + 1,
-          uuid: s.uuid,
-          isPrimary: s.isPrimary,
-          isTarget: index === targetServiceIndex
-        })));
+    try {
+      const buffer = stringToArrayBuffer(message);
 
-        console.log(`使用倒数第三个服务 (索引 ${targetServiceIndex + 1}) 发送命令: ${service.uuid}`);
-
-        // 获取目标服务的特征值
-        Taro.getBLEDeviceCharacteristics({
-          deviceId,
-          serviceId: service.uuid,
-          success: (characteristicsRes) => {
-            console.log(`倒数第三个服务 (${service.uuid}) 的特征值:`, characteristicsRes.characteristics.map(c => ({
-              uuid: c.uuid,
-              properties: c.properties
-            })));
-
-            // 使用第一个特征值来发送消息
-            if (characteristicsRes.characteristics.length < 1) {
-              reject(new Error(`倒数第三个服务中特征值数量不足，需要至少1个特征值`));
-              return;
-            }
-
-            const characteristic = characteristicsRes.characteristics[0]; // 第一个特征值（索引0）
-
-            if (!characteristic.properties.write && !characteristic.properties.writeNoResponse && !characteristic.properties.writeWithoutResponse) {
-              reject(new Error(`倒数第三个服务的第一个特征值不支持写入功能`));
-              return;
-            }
-
-            console.log('在倒数第三个服务中使用第一个特征值发送消息:', {
-              serviceIndex: targetServiceIndex + 1,
-              serviceId: service.uuid,
-              characteristicId: characteristic.uuid,
-              characteristicIndex: 1,
-              properties: characteristic.properties
-            });
-
-            // 将命令字符串转换为ArrayBuffer
-            const buffer = new ArrayBuffer(command.length);
-            const dataView = new DataView(buffer);
-            for (let i = 0; i < command.length; i++) {
-              dataView.setUint8(i, command.charCodeAt(i));
-            }
-
-            console.log(`准备通过倒数第三个服务发送命令:`, command, '转换为字节:', Array.from(new Uint8Array(buffer)));
-
-            // 写入数据
-            Taro.writeBLECharacteristicValue({
-              deviceId,
-              serviceId: service.uuid,
-              characteristicId: characteristic.uuid,
-              value: buffer,
-              success: (res) => {
-                console.log(`通过倒数第三个服务发送命令成功:`, res);
-                resolve({
-                  ...res,
-                  serviceIndex: targetServiceIndex + 1,
-                  serviceId: service.uuid,
-                  characteristicId: characteristic.uuid
-                });
-              },
-              fail: (err) => {
-                console.error(`通过倒数第三个服务发送命令失败:`, err);
-                reject(err);
-              }
-            });
+      await new Promise<void>((resolve, reject) => {
+        Taro.writeBLECharacteristicValue({
+          deviceId: this.deviceId,
+          serviceId: this.serviceId,
+          characteristicId: this.writeCharacteristicId,
+          value: buffer,
+          success: () => {
+            console.log('发送成功:', message);
+            resolve();
           },
           fail: (err) => {
-            console.error(`获取倒数第三个服务 (${service.uuid}) 的特征值失败:`, err);
+            console.error('发送失败:', err);
             reject(err);
           }
         });
+      });
+    } catch (error) {
+      console.error('发送消息失败:', error);
+
+      // 显示错误提示
+      Taro.showModal({
+        title: '提示',
+        content: '蓝牙已断开',
+        showCancel: false
+      });
+
+      throw error;
+    }
+  }
+
+  // 断开连接
+  async disconnect(): Promise<void> {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        Taro.closeBLEConnection({
+          deviceId: this.deviceId,
+          success: () => {
+            console.log('断开连接成功');
+            this.connected = false;
+            resolve();
+          },
+          fail: reject
+        });
+      });
+    } catch (error) {
+      console.error('断开连接失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取当前时间字符串
+  private getCurrentTime(): string {
+    const addZero = (num: number): string => {
+      return num < 10 ? '0' + num : num.toString();
+    };
+
+    const now = new Date();
+    const hours = addZero(now.getHours());
+    const minutes = addZero(now.getMinutes());
+    const seconds = addZero(now.getSeconds());
+
+    return `${hours}时${minutes}分${seconds}秒 收到：`;
+  }
+
+  // 清空接收文本
+  clearReceiveText(): void {
+    this.receiveText = '';
+  }
+
+  // 获取接收文本
+  getReceiveText(): string {
+    return this.receiveText;
+  }
+
+  // 设置消息接收回调
+  onMessage(callback: (message: string) => void): void {
+    this.onMessageCallback = callback;
+  }
+
+  // 设置连接状态回调
+  onConnectionStateChange(callback: (connected: boolean) => void): void {
+    this.onConnectionStateCallback = callback;
+  }
+
+  // 获取连接状态
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  // 获取设备ID
+  getDeviceId(): string {
+    return this.deviceId;
+  }
+
+  // 清理资源
+  destroy(): void {
+    this.connected = false;
+    this.receiveText = '';
+    this.onMessageCallback = undefined;
+    this.onConnectionStateCallback = undefined;
+  }
+}
+
+export const sendCommand = (deviceId: string, command: string) => {
+  return new Promise((resolve, reject) => {
+    console.log('sendCommand called with deviceId:', deviceId);
+    console.log('sendCommand deviceId type:', typeof deviceId);
+    console.log('sendCommand deviceId length:', deviceId.length);
+    console.log('当前设备服务信息:', currentDeviceService);
+
+    if (!currentDeviceService) {
+      reject(new Error(`未找到存储的服务信息，设备ID: ${deviceId}`));
+      return;
+    }
+
+    if (!currentDeviceService.writeCharacteristicId) {
+      reject(new Error('设备不支持写入操作'));
+      return;
+    }
+
+    const buffer = new ArrayBuffer(command.length);
+    const dataView = new DataView(buffer);
+    for (let i = 0; i < command.length; i++) {
+      dataView.setUint8(i, command.charCodeAt(i));
+    }
+
+    console.log(`准备发送命令:`, command, '转换为字节:', Array.from(new Uint8Array(buffer)));
+
+    Taro.writeBLECharacteristicValue({
+      deviceId,
+      serviceId: currentDeviceService.serviceId,
+      characteristicId: currentDeviceService.writeCharacteristicId,
+      value: buffer,
+      success: (res) => {
+        console.log(`发送命令成功:`, res);
+        resolve(res);
       },
       fail: (err) => {
-        console.error('获取设备服务失败:', err);
+        console.error(`发送命令失败:`, err);
         reject(err);
       }
     });
   });
 };
+// 统一的蓝牙管理器
+export class BluetoothManager {
+  private deviceManager: BluetoothDeviceManager;
+  private communicator?: BluetoothDeviceCommunicator;
+  private currentDeviceId?: string;
+
+  constructor() {
+    this.deviceManager = new BluetoothDeviceManager();
+  }
+
+  // 开始搜索设备
+  async startSearch(): Promise<void> {
+    return this.deviceManager.startSearch();
+  }
+
+  // 停止搜索设备
+  async stopSearch(): Promise<void> {
+    return this.deviceManager.stopSearch();
+  }
+
+  // 连接设备
+  async connectDevice(deviceId: string, name?: string): Promise<BluetoothDeviceCommunicator> {
+    try {
+      // 使用设备管理器连接设备
+      await this.deviceManager.connectDevice(deviceId);
+
+      // 创建通信器
+      this.communicator = new BluetoothDeviceCommunicator(deviceId);
+      this.currentDeviceId = deviceId;
+
+      // 初始化通信
+      await this.communicator.initialize();
+
+      return this.communicator;
+    } catch (error) {
+      console.error('连接设备失败:', error);
+      throw error;
+    }
+  }
+
+  // 断开当前设备
+  async disconnectCurrentDevice(): Promise<void> {
+    if (this.communicator) {
+      await this.communicator.disconnect();
+      this.communicator.destroy();
+      this.communicator = undefined;
+      this.currentDeviceId = undefined;
+    }
+  }
+
+  // 发送消息到当前设备
+  async sendMessage(message: string): Promise<void> {
+    if (!this.communicator) {
+      throw new Error('没有连接的设备');
+    }
+    return this.communicator.sendMessage(message);
+  }
+
+  // 获取当前通信器
+  getCurrentCommunicator(): BluetoothDeviceCommunicator | undefined {
+    return this.communicator;
+  }
+
+  // 获取设备管理器
+  getDeviceManager(): BluetoothDeviceManager {
+    return this.deviceManager;
+  }
+
+  // 获取当前连接的设备ID
+  getCurrentDeviceId(): string | undefined {
+    return this.currentDeviceId;
+  }
+
+  // 检查是否有连接的设备
+  hasConnectedDevice(): boolean {
+    return !!this.communicator && this.communicator.isConnected();
+  }
+
+  // 完全重置蓝牙状态
+  async reset(): Promise<void> {
+    try {
+      // 断开当前设备
+      await this.disconnectCurrentDevice();
+
+      // 停止搜索
+      await this.stopSearch();
+
+      // 重置蓝牙适配器
+      await resetBluetoothAdapter();
+
+      console.log('蓝牙管理器重置完成');
+    } catch (error) {
+      console.error('蓝牙管理器重置失败:', error);
+      throw error;
+    }
+  }
+
+  // 清理资源
+  destroy(): void {
+    if (this.communicator) {
+      this.communicator.destroy();
+    }
+    this.deviceManager.destroy();
+    this.communicator = undefined;
+    this.currentDeviceId = undefined;
+  }
+}
+
+// 导出单例实例
+export const bluetoothManager = new BluetoothManager();
