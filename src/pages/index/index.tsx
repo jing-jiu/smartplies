@@ -13,18 +13,18 @@ const Index = observer(() => {
     try {
       // 使用新的蓝牙管理器初始化
       const deviceManager = bluetoothManager.getDeviceManager();
-      
+
       // 设置设备发现回调
       deviceManager.onDeviceFound((devices) => {
         console.log('发现设备:', devices);
       });
-      
+
       // 设置状态变化回调
       deviceManager.onStateChange((state) => {
         deviceStore.setBluetoothReady(state.available);
         console.log('蓝牙状态变化:', state);
       });
-      
+
       deviceStore.setBluetoothReady(true);
       console.log('蓝牙管理器初始化成功');
     } catch (err) {
@@ -231,7 +231,7 @@ const Index = observer(() => {
       // 设置设备发现回调
       const deviceManager = bluetoothManager.getDeviceManager();
       const originalCallback = deviceManager.onDeviceFoundCallback;
-      
+
       deviceManager.onDeviceFound((devices) => {
         if (scanDeviceFound) return; // 如果已经找到设备，不再处理
 
@@ -461,7 +461,7 @@ const Index = observer(() => {
       // 设置设备发现回调
       const deviceManager = bluetoothManager.getDeviceManager();
       const originalCallback = deviceManager.onDeviceFoundCallback;
-      
+
       deviceManager.onDeviceFound(async (devices) => {
         if (deviceFound) return; // 如果已经找到设备，不再处理
 

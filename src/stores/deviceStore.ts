@@ -8,12 +8,13 @@ export interface Device {
   deviceId: string;
   connected: boolean;
   powerOn: boolean; // 设备电源状态
-  mode: number; // 1, 2, 3
+  mode: number; // 1, 2, 3, 4
   currentVoltage: number;
   currentAmpere: number;
   indicatorColor: string;
   indicatorBrightness: number;
-  schedule: Array<{ day: number; time: string; on: boolean }>;
+  schedule: Array<{ day?: number; time?: string; on?: boolean; startTime?: string; endTime?: string; enabled?: boolean }>;
+  delayOffTime: string; // 灯延迟关闭时间：'关', '1min', '5min', '30min'
   version: string;
   serialNumber: string;
   dailyUsage: number; // 今日用电量
@@ -62,12 +63,13 @@ export class DeviceStore {
         mode: 1,
         currentVoltage: 220,
         currentAmpere: 2.5,
-        indicatorColor: '#52c41a',
+        indicatorColor: 'GREEN',
         indicatorBrightness: 80,
         schedule: [
           { day: 1, time: '08:00', on: true },
           { day: 1, time: '18:00', on: false },
         ],
+        delayOffTime: '关',
         version: '1.0.0',
         serialNumber: 'SN12345678',
         dailyUsage: 0.2,
@@ -83,12 +85,13 @@ export class DeviceStore {
         mode: 2,
         currentVoltage: 220,
         currentAmpere: 1.8,
-        indicatorColor: '#1890ff',
+        indicatorColor: 'BLUE',
         indicatorBrightness: 70,
         schedule: [
           { day: 2, time: '07:30', on: true },
           { day: 2, time: '17:30', on: false },
         ],
+        delayOffTime: '1min',
         version: '1.0.0',
         serialNumber: 'SN87654321',
         dailyUsage: 0.1,
@@ -104,9 +107,10 @@ export class DeviceStore {
         mode: 3,
         currentVoltage: 0,
         currentAmpere: 0,
-        indicatorColor: '#f5222d',
+        indicatorColor: 'RED',
         indicatorBrightness: 50,
         schedule: [],
+        delayOffTime: '5min',
         version: '1.0.0',
         serialNumber: 'SN11223344',
         dailyUsage: 0,
@@ -139,6 +143,14 @@ export class DeviceStore {
     const device = this.devices.find(d => d.id === id);
     if (device) {
       Object.assign(device, settings);
+      
+      // 自动同步设备设置到云数据库
+      if (process.env.TARO_ENV === 'weapp') {
+        this.syncDeviceToCloud(device).catch(err => {
+          console.error('同步设备设置失败:', err);
+          // 同步失败不影响本地操作，只记录日志
+        });
+      }
     }
   }
 
@@ -286,9 +298,10 @@ export class DeviceStore {
       mode: 1,
       currentVoltage: 220,
       currentAmpere: 0,
-      indicatorColor: '#52c41a',
+      indicatorColor: 'GREEN',
       indicatorBrightness: 80,
       schedule: [],
+      delayOffTime: '关',
       version: '1.0.0',
       serialNumber: deviceInfo.serialNumber || `SN${Math.floor(Math.random() * 10000000)}`,
       dailyUsage: 0,

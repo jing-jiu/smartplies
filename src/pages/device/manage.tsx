@@ -78,6 +78,7 @@ const DeviceManage = observer(() => {
         setBrightnessValue(foundDevice.indicatorBrightness);
         setSelectedMode(foundDevice.mode);
         setTimerEnabled(foundDevice.schedule && foundDevice.schedule.length > 0);
+        setSelectedDelay(foundDevice.delayOffTime || '关');
 
         // 如果设备有定时信息，设置开始和结束时间
         if (foundDevice.schedule && foundDevice.schedule.length > 0) {
@@ -271,6 +272,21 @@ const DeviceManage = observer(() => {
     setBrightnessValue(value);
     if (device) {
       deviceStore.updateDeviceSettings(device.id, { indicatorBrightness: value });
+      
+      // 如果设备已连接，发送蓝牙指令
+      if (device.connected) {
+        try {
+          const command = `SET_BRIGHTNESS:${value}\\r\\n`;
+          console.log(`发送亮度控制命令: ${command}`);
+          bluetoothManager.sendMessage(command).then(() => {
+            console.log('亮度控制命令发送成功');
+          }).catch(error => {
+            console.error('发送亮度控制命令失败:', error);
+          });
+        } catch (error) {
+          console.error('亮度设置失败:', error);
+        }
+      }
     }
   };
 
@@ -308,7 +324,50 @@ const DeviceManage = observer(() => {
   // 处理延时关闭选择
   const handleDelaySelect = (delay) => {
     setSelectedDelay(delay);
-    // 这里可以添加延时关闭的逻辑
+    if (device) {
+      // 更新设备延时关闭设置
+      deviceStore.updateDeviceSettings(device.id, { delayOffTime: delay });
+      
+      // 如果设备已连接，发送蓝牙指令
+      if (device.connected) {
+        try {
+          let delayValue = 0;
+          switch (delay) {
+            case '1min':
+              delayValue = 1;
+              break;
+            case '5min':
+              delayValue = 5;
+              break;
+            case '30min':
+              delayValue = 30;
+              break;
+            default:
+              delayValue = 0; // '关'
+          }
+          
+          const command = `SET_DELAY_OFF:${delayValue}\\r\\n`;
+          console.log(`发送延时关闭命令: ${command}`);
+          bluetoothManager.sendMessage(command).then(() => {
+            console.log('延时关闭命令发送成功');
+            Taro.showToast({
+              title: `延时关闭已设置为${delay}`,
+              icon: 'success',
+              duration: 2000
+            });
+          }).catch(error => {
+            console.error('发送延时关闭命令失败:', error);
+            Taro.showToast({
+              title: '延时关闭设置失败',
+              icon: 'none',
+              duration: 2000
+            });
+          });
+        } catch (error) {
+          console.error('延时关闭设置失败:', error);
+        }
+      }
+    }
   };
 
   // HSL转HEX颜色
