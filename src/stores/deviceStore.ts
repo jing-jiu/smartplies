@@ -218,7 +218,7 @@ export class DeviceStore {
       
       try {
         // 发送蓝牙命令
-        const command = device.powerOn ? 'CHARGE:1\\r\\n' : 'CHARGE:0\\r\\n';
+        const command = device.powerOn ? 'CHARGE:1\r\n' : 'CHARGE:0\r\n';
         console.log(`发送电源控制命令: ${command}`);
         await bluetoothManager.sendMessage(command);
         console.log('电源控制命令发送成功');

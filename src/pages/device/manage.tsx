@@ -121,7 +121,7 @@ const DeviceManage = observer(() => {
       // 如果设备已连接，发送蓝牙指令
       if (device.connected) {
         try {
-          const command = value ? 'CHARGE:1\\r\\n' : 'CHARGE:0\\r\\n';
+          const command = value ? 'CHARGE:1\r\n' : 'CHARGE:0\r\n';
           console.log(`发送电源控制命令: ${command}`);
           await bluetoothManager.sendMessage(command);
           console.log('电源控制命令发送成功');
@@ -246,7 +246,7 @@ const DeviceManage = observer(() => {
 
       try {
         // 发送蓝牙指令
-        const command = `SET_LED:${selectedColor.index}\\r\\n`;
+        const command = `SET_LED:${selectedColor.index}\r\n`;
         console.log(`发送LED颜色控制命令: ${command}`);
         await bluetoothManager.sendMessage(command);
         console.log('LED颜色控制命令发送成功');
@@ -276,7 +276,7 @@ const DeviceManage = observer(() => {
       // 如果设备已连接，发送蓝牙指令
       if (device.connected) {
         try {
-          const command = `SET_BRIGHTNESS:${value}\\r\\n`;
+          const command = `SET_BRIGHTNESS:${value}\r\n`;
           console.log(`发送亮度控制命令: ${command}`);
           bluetoothManager.sendMessage(command).then(() => {
             console.log('亮度控制命令发送成功');
@@ -299,7 +299,7 @@ const DeviceManage = observer(() => {
       // 如果设备已连接，发送蓝牙指令
       if (device.connected) {
         try {
-          const command = `SET_DEV_MODE:${mode}\\r\\n`;
+          const command = `SET_DEV_MODE:${mode}\r\n`;
           console.log(`发送模式切换命令: ${command}`);
           await bluetoothManager.sendMessage(command);
           console.log('模式切换命令发送成功');
@@ -346,7 +346,7 @@ const DeviceManage = observer(() => {
               delayValue = 0; // '关'
           }
           
-          const command = `SET_DELAY_OFF:${delayValue}\\r\\n`;
+          const command = `SET_DELAY_OFF:${delayValue}\r\n`;
           console.log(`发送延时关闭命令: ${command}`);
           bluetoothManager.sendMessage(command).then(() => {
             console.log('延时关闭命令发送成功');
