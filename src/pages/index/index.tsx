@@ -6,6 +6,7 @@ import { deviceStore } from '../../stores/deviceStore';
 import { bluetoothManager, BluetoothDeviceManager } from '../../services/bluetooth';
 import './index.scss';
 import Taro from '@tarojs/taro';
+import { bluetoothConnectionMonitor } from '../../services/bluetooth-connection-monitor';
 
 const Index = observer(() => {
   // 页面加载时初始化蓝牙
@@ -27,25 +28,38 @@ const Index = observer(() => {
 
       deviceStore.setBluetoothReady(true);
       console.log('蓝牙管理器初始化成功');
+      
+      // 启动蓝牙连接状态监听
+      bluetoothConnectionMonitor.startMonitoring();
+      console.log('蓝牙连接状态监听已启动');
     } catch (err) {
       console.error('蓝牙管理器初始化失败', err);
     }
   });
 
   // 每次页面显示时检查设备连接状态
-  useDidShow(() => {
+  useDidShow(async () => {
     if (deviceStore.devices.length > 0) {
       // 检查设备连接状态
-      console.log('检查设备连接状态');
+      console.log('页面显示，检查设备连接状态');
+      try {
+        await bluetoothConnectionMonitor.checkAllDevices();
+      } catch (error) {
+        console.error('检查设备连接状态失败:', error);
+      }
     }
   });
 
   // 下拉刷新
   usePullDownRefresh(async () => {
-    console.log('下拉刷新，重新从云数据库加载设备');
+    console.log('下拉刷新，重新从云数据库加载设备并刷新连接状态');
     try {
       // 重新从云数据库加载设备
       await deviceStore.loadDevicesFromCloud();
+      
+      // 刷新设备连接状态
+      await deviceStore.refreshDeviceConnectionStatus();
+      
       showToast({
         title: '刷新成功',
         icon: 'success',
@@ -500,7 +514,7 @@ const Index = observer(() => {
 
             try {
               // 清除超时定时器
-              clearTimeout(connectTimeout);
+              // clearTimeout(connectTimeout);
 
               // 连接设备
               const communicator = await bluetoothManager.connectDevice(discoveredDevice.deviceId, device.name);
@@ -748,6 +762,15 @@ const Index = observer(() => {
                   <View className='device-status'>
                     <View className={`status-dot ${device.connected ? 'online' : 'offline'}`}></View>
                     <Text className='status-text'>{device.connected ? '在线' : '离线'}</Text>
+                  </View>
+                  <View
+                    className='device-refresh'
+                    onClick={(e) => {
+                      e.stopPropagation(); // 阻止事件冒泡
+                      deviceStore.checkSingleDeviceConnectionStatus(device.id);
+                    }}
+                  >
+                    <AtIcon value='reload' size='16' color='#666'></AtIcon>
                   </View>
                   <View
                     className='device-settings'

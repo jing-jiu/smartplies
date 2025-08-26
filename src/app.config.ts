@@ -22,13 +22,13 @@ export default {
         pagePath: "pages/index/index",
         text: "首页",
         iconPath: "assets/icons/home.jpg",
-        selectedIconPath: "assets/icons/home-active.jpg"
+        selectedIconPath: "assets/icons/home.jpg"
       },
       {
         pagePath: "pages/profile/index",
         text: "我的",
         iconPath: "assets/icons/user.jpg",
-        selectedIconPath: "assets/icons/user-active.jpg"
+        selectedIconPath: "assets/icons/user.jpg"
       }
     ]
   }

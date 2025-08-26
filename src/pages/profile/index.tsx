@@ -402,7 +402,7 @@ const Profile = observer(() => {
         </View> */}
 
         {/* 获取手机号按钮，仅在已登录但未绑定手机号时显示 */}
-        {userStore.hasLoggedIn && (
+        {/* {userStore.hasLoggedIn && (
           <View className='info-item'>
             <Text className='label'>手机号码</Text>
             <View className='function-right'>
@@ -416,7 +416,7 @@ const Profile = observer(() => {
               <AtIcon value='chevron-right' size='18' color='#999'></AtIcon>
             </View>
           </View>
-        )}
+        )} */}
 
         <View className='info-item' onClick={handleDeviceClick}>
           <Text className='label'>我的设备</Text>

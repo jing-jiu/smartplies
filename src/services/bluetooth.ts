@@ -277,6 +277,9 @@ export class BluetoothDeviceManager {
         await this.stopSearch();
       }
 
+      // 确保蓝牙适配器已初始化
+      await ensureBluetoothInitialized();
+
       // 重置蓝牙适配器
       await this.resetAdapter();
 
@@ -473,6 +476,9 @@ export class BluetoothDeviceCommunicator {
     try {
       console.log('初始化设备通信:', this.deviceId);
 
+      // 确保蓝牙适配器已初始化
+      await ensureBluetoothInitialized();
+
       // 获取设备服务
       const servicesRes = await new Promise<any>((resolve, reject) => {
         Taro.getBLEDeviceServices({
@@ -656,14 +662,6 @@ export class BluetoothDeviceCommunicator {
       });
     } catch (error) {
       console.error('发送消息失败:', error);
-
-      // 显示错误提示
-      Taro.showModal({
-        title: '提示',
-        content: '蓝牙已断开',
-        showCancel: false
-      });
-
       throw error;
     }
   }
@@ -746,9 +744,39 @@ export class BluetoothManager {
   private deviceManager: BluetoothDeviceManager;
   private communicator?: BluetoothDeviceCommunicator;
   private currentDeviceId?: string;
+  private connectionStateCallback?: (deviceId: string, connected: boolean) => void;
 
   constructor() {
     this.deviceManager = new BluetoothDeviceManager();
+    this.setupGlobalConnectionListener();
+  }
+
+  // 设置全局蓝牙连接状态监听
+  private setupGlobalConnectionListener() {
+    Taro.onBLEConnectionStateChange((res) => {
+      console.log('全局蓝牙连接状态变化:', res);
+      
+      // 通知外部回调
+      if (this.connectionStateCallback) {
+        this.connectionStateCallback(res.deviceId, res.connected);
+      }
+      
+      // 如果是当前连接的设备断开了
+      if (res.deviceId === this.currentDeviceId && !res.connected) {
+        console.log('当前设备断开连接:', res.deviceId);
+        this.handleDeviceDisconnected();
+      }
+    });
+  }
+
+  // 处理设备断开连接
+  private handleDeviceDisconnected() {
+    if (this.communicator) {
+      this.communicator.destroy();
+      this.communicator = undefined;
+      this.currentDeviceId = undefined;
+      console.log('已清理断开的设备连接');
+    }
   }
 
   // 开始搜索设备
@@ -764,6 +792,9 @@ export class BluetoothManager {
   // 连接设备
   async connectDevice(deviceId: string, name?: string): Promise<BluetoothDeviceCommunicator> {
     try {
+      // 确保蓝牙适配器已初始化
+      await ensureBluetoothInitialized();
+      
       // 使用设备管理器连接设备
       await this.deviceManager.connectDevice(deviceId);
 
@@ -838,6 +869,49 @@ export class BluetoothManager {
     }
   }
 
+  // 设置连接状态变化回调
+  onConnectionStateChange(callback: (deviceId: string, connected: boolean) => void): void {
+    this.connectionStateCallback = callback;
+  }
+
+  // 检查设备连接状态
+  async checkDeviceConnectionState(deviceId: string): Promise<boolean> {
+    try {
+      // 尝试获取设备服务来检查连接状态
+      await new Promise((resolve, reject) => {
+        Taro.getBLEDeviceServices({
+          deviceId,
+          success: resolve,
+          fail: reject
+        });
+      });
+      return true; // 如果能获取服务，说明设备已连接
+    } catch (error) {
+      console.log('设备未连接或连接已断开:', deviceId);
+      return false; // 获取服务失败，说明设备未连接
+    }
+  }
+
+  // 批量检查所有设备的连接状态
+  async checkAllDevicesConnectionState(deviceIds: string[]): Promise<Map<string, boolean>> {
+    const connectionStates = new Map<string, boolean>();
+    
+    for (const deviceId of deviceIds) {
+      try {
+        const isConnected = await this.checkDeviceConnectionState(deviceId);
+        connectionStates.set(deviceId, isConnected);
+      } catch (error) {
+        console.error('检查设备连接状态失败:', deviceId, error);
+        connectionStates.set(deviceId, false);
+      }
+      
+      // 避免频繁调用，添加小延迟
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    return connectionStates;
+  }
+
   // 清理资源
   destroy(): void {
     if (this.communicator) {
@@ -846,8 +920,30 @@ export class BluetoothManager {
     this.deviceManager.destroy();
     this.communicator = undefined;
     this.currentDeviceId = undefined;
+    this.connectionStateCallback = undefined;
   }
 }
+
+// 全局蓝牙适配器初始化检查
+export const ensureBluetoothInitialized = async (): Promise<void> => {
+  try {
+    const state = await getBluetoothAdapterState();
+    if (state.available) {
+      console.log('蓝牙适配器已初始化');
+      return;
+    }
+  } catch (error) {
+    console.log('蓝牙适配器未初始化，正在初始化...');
+  }
+  
+  try {
+    await initBluetooth();
+    console.log('蓝牙适配器初始化成功');
+  } catch (error) {
+    console.error('蓝牙适配器初始化失败:', error);
+    throw new Error('蓝牙适配器初始化失败，请检查蓝牙权限和状态');
+  }
+};
 
 // 导出单例实例
 export const bluetoothManager = new BluetoothManager();

@@ -33,6 +33,9 @@ export class DeviceStore {
   constructor() {
     makeAutoObservable(this);
     
+    // 设置蓝牙连接状态监听
+    this.setupBluetoothConnectionListener();
+    
     // 尝试从云数据库加载设备
     if (process.env.TARO_ENV === 'weapp') {
       // 延迟执行，确保云环境已初始化
@@ -48,6 +51,72 @@ export class DeviceStore {
     } else {
       // 非微信环境，使用测试设备
       this.initTestDevices();
+    }
+    
+    // 启动定期连接状态检查
+    this.startConnectionStatusCheck();
+  }
+
+  // 设置蓝牙连接状态监听
+  private setupBluetoothConnectionListener() {
+    bluetoothManager.onConnectionStateChange((deviceId: string, connected: boolean) => {
+      console.log('蓝牙连接状态变化:', deviceId, connected);
+      
+      // 根据deviceId找到对应的设备并更新状态
+      const device = this.devices.find(d => d.deviceId === deviceId);
+      if (device) {
+        console.log(`更新设备 ${device.name} 连接状态:`, connected);
+        this.updateDeviceStatus(device.id, connected);
+        
+        // 如果设备断开连接，显示提示
+        if (!connected) {
+          Taro.showToast({
+            title: `${device.name} 已断开`,
+            icon: 'none',
+            duration: 2000
+          });
+        }
+      }
+    });
+  }
+
+  // 启动定期连接状态检查
+  private startConnectionStatusCheck() {
+    // 每30秒检查一次所有设备的连接状态
+    setInterval(async () => {
+      await this.checkAllDevicesConnectionStatus();
+    }, 30000);
+    
+    // 初始检查
+    setTimeout(async () => {
+      await this.checkAllDevicesConnectionStatus();
+    }, 5000);
+  }
+
+  // 检查所有设备的连接状态
+  @action
+  async checkAllDevicesConnectionStatus() {
+    if (this.devices.length === 0) return;
+    
+    console.log('开始检查所有设备连接状态');
+    
+    const deviceIds = this.devices.map(d => d.deviceId);
+    
+    try {
+      const connectionStates = await bluetoothManager.checkAllDevicesConnectionState(deviceIds);
+      
+      // 更新设备连接状态
+      for (const device of this.devices) {
+        const isConnected = connectionStates.get(device.deviceId) || false;
+        if (device.connected !== isConnected) {
+          console.log(`设备 ${device.name} 连接状态变化: ${device.connected} -> ${isConnected}`);
+          this.updateDeviceStatus(device.id, isConnected);
+        }
+      }
+      
+      console.log('设备连接状态检查完成');
+    } catch (error) {
+      console.error('检查设备连接状态失败:', error);
     }
   }
 
@@ -205,6 +274,58 @@ export class DeviceStore {
         );
       }
     });
+  }
+
+  // 手动刷新设备连接状态
+  @action
+  async refreshDeviceConnectionStatus() {
+    console.log('手动刷新设备连接状态');
+    this.setLoading(true);
+    
+    try {
+      await this.checkAllDevicesConnectionStatus();
+      
+      Taro.showToast({
+        title: '连接状态已更新',
+        icon: 'success',
+        duration: 1500
+      });
+    } catch (error) {
+      console.error('刷新设备连接状态失败:', error);
+      Taro.showToast({
+        title: '刷新失败',
+        icon: 'none',
+        duration: 2000
+      });
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  // 检查单个设备的连接状态
+  @action
+  async checkSingleDeviceConnectionStatus(deviceId: string) {
+    const device = this.devices.find(d => d.id === deviceId);
+    if (!device) return;
+    
+    console.log('检查单个设备连接状态:', device.name);
+    
+    try {
+      const isConnected = await bluetoothManager.checkDeviceConnectionState(device.deviceId);
+      
+      if (device.connected !== isConnected) {
+        console.log(`设备 ${device.name} 连接状态更新: ${device.connected} -> ${isConnected}`);
+        this.updateDeviceStatus(device.id, isConnected);
+        
+        Taro.showToast({
+          title: `${device.name} ${isConnected ? '已连接' : '已断开'}`,
+          icon: isConnected ? 'success' : 'none',
+          duration: 2000
+        });
+      }
+    } catch (error) {
+      console.error('检查设备连接状态失败:', error);
+    }
   }
 
   // 切换设备电源状态
