@@ -1,6 +1,7 @@
 import { Component } from 'react'
 import Taro from '@tarojs/taro'
 import type { PropsWithChildren } from 'react'
+import { userStore } from './stores/userStore'
 
 import './app.scss'
 
@@ -74,9 +75,63 @@ class App extends Component<PropsWithChildren> {
     }
   }
 
-  componentDidShow() { }
+  componentDidShow() {
+    // 每次进入小程序检查登录状态
+    this.checkLoginAndLocation()
+  }
 
   componentDidHide() { }
+
+  // 检查登录状态和获取定位
+  async checkLoginAndLocation() {
+    if (process.env.TARO_ENV === 'weapp') {
+      try {
+        // 检查用户登录状态
+        const isLoggedIn = await userStore.checkLoginStatus()
+        
+        if (!isLoggedIn) {
+          // 未登录，引导用户登录
+          console.log('用户未登录，准备引导登录')
+          Taro.showModal({
+            title: '登录提示',
+            content: '请先登录以使用完整功能',
+            confirmText: '立即登录',
+            cancelText: '稍后登录',
+            success: async (res) => {
+              if (res.confirm) {
+                const loginSuccess = await userStore.guideUserLogin()
+                if (loginSuccess) {
+                  Taro.showToast({
+                    title: '登录成功',
+                    icon: 'success',
+                    duration: 2000
+                  })
+                } else {
+                  Taro.showToast({
+                    title: '登录失败，请重试',
+                    icon: 'none',
+                    duration: 2000
+                  })
+                }
+              }
+            }
+          })
+        } else {
+          // 已登录，获取用户定位
+          console.log('用户已登录，准备获取定位')
+          const location = await userStore.getUserLocation()
+          if (location) {
+            console.log('定位获取成功')
+          } else {
+            console.log('定位获取失败或用户未授权')
+            // 错误处理已在userStore中完成
+          }
+        }
+      } catch (error) {
+        console.error('检查登录状态失败:', error)
+      }
+    }
+  }
 
   // this.props.children 是将要会渲染的页面
   render() {

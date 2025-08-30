@@ -284,7 +284,11 @@ page {
   line-height: 88px;
   font-size: 32px;
   border-radius: 44px;
-  background-color: #636AE8FF;
+  background-color: #A6DEE2;
   color: #fff;
   border: none;
+}
+
+.save-button:active {
+  background-color: #85BFC3;
 }

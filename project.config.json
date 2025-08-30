@@ -36,7 +36,8 @@
       "disablePlugins": [],
       "outputPath": ""
     },
-    "cloudfunctionTemplateRoot": "cloudfunctionTemplate"
+    "cloudfunctionTemplateRoot": "cloudfunctionTemplate",
+    "__usePrivacyCheck__": true
   },
   "compileType": "miniprogram",
   "simulatorType": "wechat",

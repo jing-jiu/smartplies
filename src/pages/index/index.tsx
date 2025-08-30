@@ -295,6 +295,16 @@ const Index = observer(() => {
               // 设置为当前设备
               deviceStore.setCurrentDevice(newDevice);
 
+              // 发送SYNC_DATE指令
+              try {
+                const syncCommand = `SYNC_DATE:${Math.floor(Date.now() / 1000)}\r\n`;
+                console.log('发送同步时间指令:', syncCommand);
+                await bluetoothManager.sendMessage(syncCommand);
+                console.log('同步时间指令发送成功');
+              } catch (error) {
+                console.error('发送同步时间指令失败:', error);
+              }
+
               // 隐藏加载提示
               Taro.hideLoading();
 
@@ -522,9 +532,18 @@ const Index = observer(() => {
 
               // 设置消息接收回调
               communicator.onMessage((message) => {
-                console.log(`收到来自设备的消息:`, message);
                 handleDeviceMessage(discoveredDevice.deviceId, message);
               });
+
+              // 发送SYNC_DATE指令
+              try {
+                const syncCommand = `SYNC_DATE:${Math.floor(Date.now() / 1000)}\r\n`;
+                console.log('发送同步时间指令:', syncCommand);
+                await bluetoothManager.sendMessage(syncCommand);
+                console.log('同步时间指令发送成功');
+              } catch (error) {
+                console.error('发送同步时间指令失败:', error);
+              }
 
               // 更新设备连接状态为在线
               deviceStore.updateDeviceStatus(device.id, true);
@@ -590,6 +609,8 @@ const Index = observer(() => {
 
   // 处理设备消息的统一函数
   const handleDeviceMessage = (deviceId: string, message: string) => {
+    console.log('收到设备消息:', deviceId, message);
+    
     if (message.includes('ERROR')) {
       console.log('收到设备错误消息:', message);
       showToast({
@@ -609,7 +630,34 @@ const Index = observer(() => {
         icon: 'none',
         duration: 2000
       });
-    }
+    } else {
+      // 处理功率信息: POWER:220.5,1.2,264.6
+      const dataStr = message.substring(6);
+      const [voltage, current, power] = dataStr.split(' ');
+      
+      console.log('收到实时功率数据:', { voltage, current, power });
+      
+      // 更新设备实时数据
+      deviceStore.updateDeviceRealtimeData(deviceId, {
+        voltage,
+        current,
+        power,
+        timestamp: Date.now()
+      });
+    } 
+    // else if (message.startsWith('USAGE:')) {
+    //   // 处理用电量信息: USAGE:0.5,12.3,45.6
+    //   const dataStr = message.substring(6);
+    //   const [daily, monthly, yearly] = dataStr.split(',').map(Number);
+      
+    //   console.log('收到用电量数据:', { daily, monthly, yearly });
+      
+    //   // 找到对应的设备
+    //   const device = deviceStore.findDeviceByDeviceId(deviceId);
+    //   if (device) {
+    //     deviceStore.updateDeviceUsage(device.id, daily, monthly, yearly);
+    //   }
+    // }
   };
 
   // 长按删除设备
@@ -810,11 +858,34 @@ const Index = observer(() => {
       <View className='usage-card'>
         <View className='usage-header'>
           <Text className='usage-title'>用电信息</Text>
+          <Text className='usage-subtitle'>实时数据</Text>
         </View>
         <View className='usage-content'>
-          <Text className='usage-value'>{deviceStore.getDailyUsage()}</Text>
-          <Text className='usage-unit'>度 (今日)</Text>
+          <View className='realtime-data'>
+            <View className='data-item'>
+              <Text className='data-label'>功率</Text>
+              <Text className='data-value'>{deviceStore.currentDevice?.currentPower || '0.0'}W</Text>
+            </View>
+            <View className='data-item'>
+              <Text className='data-label'>电压</Text>
+              <Text className='data-value'>{deviceStore.currentDevice?.currentVoltage || '0.0'}V</Text>
+            </View>
+            <View className='data-item'>
+              <Text className='data-label'>电流</Text>
+              <Text className='data-value'>{deviceStore.currentDevice?.currentAmpere || '0.00'}A</Text>
+            </View>
+          </View>
+          <View className='daily-usage'>
+            <Text className='usage-value'>{deviceStore.getDailyUsage().toFixed(2)}</Text>
+            <Text className='usage-unit'>kWh</Text>
+          </View>
         </View>
+      </View>
+
+      <View className='firmware-upgrade-button'>
+        <AtButton className='firmware-button' onClick={() => {}}>
+          固件升级
+        </AtButton>
       </View>
 
       {/* NFC功能卡片 */}

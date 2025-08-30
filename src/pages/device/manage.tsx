@@ -514,11 +514,6 @@ const DeviceManage = observer(() => {
         </View>
 
         <View className='setting-item'>
-          <Text className='setting-label'>蓝牙绑定</Text>
-          <Switch checked={bluetoothEnabled} onChange={e => handleBluetoothChange(e.detail.value)} color='#636AE8FF' />
-        </View>
-
-        <View className='setting-item'>
           <Text className='setting-label'>指示灯显示</Text>
           <Switch checked={indicatorEnabled} onChange={e => handleIndicatorChange(e.detail.value)} color='#636AE8FF' />
         </View>

@@ -9,8 +9,9 @@ export interface Device {
   connected: boolean;
   powerOn: boolean; // 设备电源状态
   mode: number; // 1, 2, 3, 4
-  currentVoltage: number;
-  currentAmpere: number;
+  currentVoltage: string;
+  currentAmpere: string;
+  currentPower?: string;
   indicatorColor: string;
   indicatorBrightness: number;
   schedule: Array<{ day?: number; time?: string; on?: boolean; startTime?: string; endTime?: string; enabled?: boolean }>;
@@ -130,8 +131,8 @@ export class DeviceStore {
         connected: false, // 初始状态为离线
         powerOn: true,
         mode: 1,
-        currentVoltage: 220,
-        currentAmpere: 2.5,
+        currentVoltage: '220',
+        currentAmpere: '2.5',
         indicatorColor: 'GREEN',
         indicatorBrightness: 80,
         schedule: [
@@ -152,8 +153,8 @@ export class DeviceStore {
         connected: false, // 初始状态为离线
         powerOn: false,
         mode: 2,
-        currentVoltage: 220,
-        currentAmpere: 1.8,
+        currentVoltage: '220',
+        currentAmpere: '1.8',
         indicatorColor: 'BLUE',
         indicatorBrightness: 70,
         schedule: [
@@ -174,8 +175,8 @@ export class DeviceStore {
         connected: false,
         powerOn: false,
         mode: 3,
-        currentVoltage: 0,
-        currentAmpere: 0,
+        currentVoltage: '0',
+        currentAmpere: '0',
         indicatorColor: 'RED',
         indicatorBrightness: 50,
         schedule: [],
@@ -360,6 +361,18 @@ export class DeviceStore {
     return false;
   }
 
+  // 更新设备实时数据
+  @action
+  updateDeviceRealtimeData(deviceId: string, data: { voltage: string; current: string; power: string; timestamp: number }) {
+    const device = this.devices.find(d => d.deviceId === deviceId);
+    if (device) {
+      device.currentVoltage = data.voltage;
+      device.currentAmpere = data.current;
+      device.currentPower = data.power;
+      console.log(`设备 ${device.name} 实时数据更新: 电压=${data.voltage}V, 电流=${data.current}A, 功率=${data.power}W`);
+    }
+  }
+
   // 获取设备的今日用电量
   getDailyUsage(): number {
     return this.currentDevice?.dailyUsage || 0;
@@ -417,8 +430,8 @@ export class DeviceStore {
       connected: true,
       powerOn: false,
       mode: 1,
-      currentVoltage: 220,
-      currentAmpere: 0,
+      currentVoltage: '220',
+      currentAmpere: '0',
       indicatorColor: 'GREEN',
       indicatorBrightness: 80,
       schedule: [],

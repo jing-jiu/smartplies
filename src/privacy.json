@@ -1,0 +1,29 @@
+{
+  "__usePrivacyCheck__": true,
+  "privacyApiInfos": [
+    {
+      "apiName": "getFuzzyLocation",
+      "desc": "用于获取用户大致位置，提供基于位置的服务功能",
+      "privacyDescList": [
+        {
+          "privacyDesc": "为了提供基于位置的设备连接服务，需要获取您的大致地理位置信息",
+          "privacyKey": "Location"
+        }
+      ]
+    },
+    {
+      "apiName": "scope.userFuzzyLocation",
+      "desc": "获取用户模糊地理位置权限，用于提供基于位置的服务",
+      "privacyDescList": [
+        {
+          "privacyDesc": "为了提供基于位置的设备连接和管理服务，需要获取您的大致地理位置权限",
+          "privacyKey": "Location"
+        }
+      ]
+    }
+  ],
+  "__usePrivacyCheck__": true,
+  "privacyContractName": "《智能设备连接隐私协议》",
+  "privacyUrl": "https://your-domain.com/privacy-policy",
+  "userAgreementUrl": "https://your-domain.com/user-agreement"
+}
