@@ -21,6 +21,8 @@ export interface Device {
   dailyUsage: number; // 今日用电量
   monthlyUsage: number; // 本月用电量
   yearlyUsage: number; // 年度用电量
+  type: 'color' | 'animal'; // 设备类型：color表示颜色选择，animal表示动画选择
+  selectedAnimation?: number; // 当type为animal时，存储选中的动画索引
 }
 
 export class DeviceStore {
@@ -144,7 +146,8 @@ export class DeviceStore {
         serialNumber: 'SN12345678',
         dailyUsage: 0.2,
         monthlyUsage: 5.8,
-        yearlyUsage: 45.2
+        yearlyUsage: 45.2,
+        type: 'color'
       },
       {
         id: 'test-device-002',
@@ -166,7 +169,9 @@ export class DeviceStore {
         serialNumber: 'SN87654321',
         dailyUsage: 0.1,
         monthlyUsage: 3.2,
-        yearlyUsage: 28.7
+        yearlyUsage: 28.7,
+        type: 'animal',
+        selectedAnimation: 0
       },
       {
         id: 'test-device-003',
@@ -185,7 +190,8 @@ export class DeviceStore {
         serialNumber: 'SN11223344',
         dailyUsage: 0,
         monthlyUsage: 1.5,
-        yearlyUsage: 15.3
+        yearlyUsage: 15.3,
+        type: 'color'
       }
     ];
     
@@ -440,7 +446,8 @@ export class DeviceStore {
       serialNumber: deviceInfo.serialNumber || `SN${Math.floor(Math.random() * 10000000)}`,
       dailyUsage: 0,
       monthlyUsage: 0,
-      yearlyUsage: 0
+      yearlyUsage: 0,
+      type: 'color'
     };
 
     // 添加到设备列表

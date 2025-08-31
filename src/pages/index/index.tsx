@@ -1,4 +1,4 @@
-import { View, Text, ScrollView } from '@tarojs/components';
+import { View, Text, ScrollView, Picker } from '@tarojs/components';
 import { useLoad, useDidShow, usePullDownRefresh, stopPullDownRefresh, showToast } from '@tarojs/taro';
 import { observer } from 'mobx-react';
 import { AtButton, AtIcon } from 'taro-ui';
@@ -7,6 +7,35 @@ import { bluetoothManager, BluetoothDeviceManager } from '../../services/bluetoo
 import './index.scss';
 import Taro from '@tarojs/taro';
 import { bluetoothConnectionMonitor } from '../../services/bluetooth-connection-monitor';
+
+// 颜色选项数组
+const colorArray = [
+  { color: "RED", index: 1 },         // 红色
+  { color: "GREEN", index: 2 },      // 绿色
+  { color: "DARK_BLUE", index: 3 },  // 深蓝色
+  { color: "SKY_BLUE", index: 4 },   // 天蓝色
+  { color: "PINK", index: 5 },       // 粉色
+  { color: "YELLOW", index: 6 },     // 黄色
+  { color: "ORANGE", index: 7 },     // 橙色
+  { color: "NO_COLOR", index: 8 },   // 无颜色（黑色/透明）
+  { color: "WHITE", index: 9 },      // 白色
+  { color: "BRIGHT_PINK", index: 10 }, // 鲜艳粉红色
+  { color: "DARK_RED", index: 11 },  // 深暗红色
+  { color: "BRIGHT_MAGENTA", index: 12 }, // 鲜艳紫红色
+  { color: "DARK_ROSE", index: 13 }, // 深玫红色
+  { color: "BROWN_RED", index: 14 }, // 棕红色
+  { color: "LIGHT_YELLOW_GREEN", index: 15 }, // 淡黄绿色
+  { color: "BRIGHT_RED", index: 16 }, // 亮红色
+  { color: "TRUE_RED", index: 17 },  // 正红色
+  { color: "ORANGE_RED", index: 18 }, // 橙红色
+  { color: "DARK_ORANGE_BROWN", index: 19 }, // 深橙棕色
+  { color: "BRIGHT_ORANGE", index: 20 }, // 亮橙色
+  { color: "LIGHT_BLUE", index: 21 }, // 浅蓝色
+  { color: "DARK_GREEN", index: 22 }, // 深绿色
+  { color: "GRASS_GREEN", index: 23 }, // 草绿色
+  { color: "PURPLE", index: 24 },    // 紫色
+  { color: "PEACH", index: 25 }      // 桃红色
+];
 
 const Index = observer(() => {
   // 页面加载时初始化蓝牙
@@ -100,7 +129,108 @@ const Index = observer(() => {
     });
   };
 
+  // 动画选项数组
+  const animationArray = [
+    { name: "表情动画", index: 1 },
+    { name: "狗狗动画", index: 2 },
+    { name: "彩虹动画", index: 3 },
+    { name: "心跳动画", index: 4 },
+    { name: "流水动画", index: 5 },
+    { name: "闪烁动画", index: 6 },
+    { name: "呼吸动画", index: 7 },
+    { name: "无动画", index: 8 }
+  ];
 
+  // 处理动画选择
+  const handleAnimationSelect = async (animationIndex: number) => {
+    const currentDevice = deviceStore.currentDevice;
+    if (!currentDevice) {
+      showToast({
+        title: '请先选择设备',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+
+    if (!currentDevice.connected) {
+      showToast({
+        title: '设备未连接',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+
+    try {
+      const selectedAnimation = animationArray[animationIndex - 1];
+      const command = `SET_ANIMAL:${animationIndex}\r\n`;
+      console.log(`发送动画控制命令: ${command}`);
+      await bluetoothManager.sendMessage(command);
+      console.log('动画控制命令发送成功');
+
+      showToast({
+        title: `已设置为${selectedAnimation.name}`,
+        icon: 'success',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('发送动画控制命令失败:', error);
+      showToast({
+        title: '动画设置失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  };
+
+  // 处理颜色选择
+  const handleColorChange = async (e) => {
+    const selectedIndex = e.detail.value;
+    const currentDevice = deviceStore.currentDevice;
+    
+    if (!currentDevice) {
+      showToast({
+        title: '请先选择设备',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+
+    if (!currentDevice.connected) {
+      showToast({
+        title: '设备未连接',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+
+    try {
+      const selectedColor = colorArray[selectedIndex];
+      deviceStore.updateDeviceSettings(currentDevice.id, { indicatorColor: selectedColor.color });
+
+      // 发送蓝牙指令
+      const command = `SET_LED:${selectedColor.index}\r\n`;
+      console.log(`发送LED颜色控制命令: ${command}`);
+      await bluetoothManager.sendMessage(command);
+      console.log('LED颜色控制命令发送成功');
+
+      showToast({
+        title: `颜色已设置为${selectedColor.color}`,
+        icon: 'success',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('发送LED颜色控制命令失败:', error);
+      showToast({
+        title: '颜色设置失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  };
 
   // 更多功能
   const handleMore = () => {
@@ -802,6 +932,15 @@ const Index = observer(() => {
             <View
               className='device-card clickable'
               key={device.id}
+              onClick={() => {
+                // 设置为当前设备
+                deviceStore.setCurrentDevice(device);
+                showToast({
+                  title: `${device.name}`,
+                  icon: 'success',
+                  duration: 1500,
+                });
+              }}
               onLongPress={() => handleLongPressDevice(device)}
             >
               <View className='device-header'>
@@ -835,7 +974,13 @@ const Index = observer(() => {
                 <View className='device-details'>
                   <Text className='device-name'>{device.name}</Text>
                   <Text className='device-sn'>SN: {device.serialNumber}</Text>
-                  <Text className='device-hint' onClick={() => handleSelectDevice(device)}>
+                  <Text 
+                    className='device-hint' 
+                    onClick={(e) => {
+                      e.stopPropagation(); // 阻止事件冒泡
+                      handleSelectDevice(device);
+                    }}
+                  >
                     {device.connected ? '点击重新连接 | 长按删除' : '点击进行蓝牙连接 | 长按删除'}
                   </Text>
                 </View>
@@ -858,7 +1003,7 @@ const Index = observer(() => {
       <View className='usage-card'>
         <View className='usage-header'>
           <Text className='usage-title'>用电信息</Text>
-          <Text className='usage-subtitle'>实时数据</Text>
+          <Text className='usage-subtitle'>{deviceStore.currentDevice?.name || '未选择设备'}</Text>
         </View>
         <View className='usage-content'>
           <View className='realtime-data'>
@@ -899,6 +1044,71 @@ const Index = observer(() => {
           <AtButton className='nfc-button' onClick={handleAddTerminal}>添加终端</AtButton>
         </View>
       </View>
+
+      {/* 设备功能卡片 - 根据设备类型显示不同内容 */}
+      {deviceStore.currentDevice && (
+        <View className='device-function-card'>
+          {deviceStore.currentDevice.type === 'animal' ? (
+            // 动画选择UI
+            <>
+              <View className='function-header'>
+                <Text className='function-title'>动画选择</Text>
+                <Text className='function-subtitle'>当前选择: {animationArray[deviceStore.currentDevice.selectedAnimation || 0]?.name || '未选择'}</Text>
+              </View>
+              <View className='animation-grid'>
+                {animationArray.map((animation, index) => (
+                  <View 
+                    key={animation.index}
+                    className={`animation-item ${deviceStore.currentDevice.selectedAnimation === animation.index ? 'selected' : ''}`}
+                    onClick={() => {
+                      handleAnimationSelect(animation.index);
+                      // 更新设备的选中动画
+                      deviceStore.updateDeviceSettings(deviceStore.currentDevice.id, { selectedAnimation: animation.index });
+                    }}
+                  >
+                    <View className='animation-icon'>
+                      {animation.index === 1 && <View className='emoji-icon'>😊</View>}
+                      {animation.index === 2 && <View className='emoji-icon'>🐕</View>}
+                      {animation.index === 3 && <View className='emoji-icon'>🌈</View>}
+                      {animation.index === 4 && <View className='emoji-icon'>💓</View>}
+                      {animation.index === 5 && <View className='emoji-icon'>🌊</View>}
+                      {animation.index === 6 && <View className='emoji-icon'>✨</View>}
+                      {animation.index === 7 && <View className='emoji-icon'>🫁</View>}
+                      {animation.index === 8 && <View className='emoji-icon'>⚫</View>}
+                    </View>
+                    <Text className='animation-name'>{animation.name}</Text>
+                  </View>
+                ))}
+              </View>
+              <View className='function-more'>
+                <Text className='more-text'>更多</Text>
+                <AtIcon value='chevron-right' size='16' color='#999'></AtIcon>
+              </View>
+            </>
+          ) : (
+            // 颜色选择UI
+            <>
+              <View className='function-header'>
+                <Text className='function-title'>颜色选择</Text>
+                <Text className='function-subtitle'>当前颜色: {deviceStore.currentDevice.indicatorColor || '未设置'}</Text>
+              </View>
+              <View className='color-selector'>
+                <Picker 
+                  mode='selector' 
+                  range={colorArray.map(c => c.color)} 
+                  value={colorArray.findIndex(c => c.color === deviceStore.currentDevice.indicatorColor) || 0} 
+                  onChange={handleColorChange}
+                >
+                  <View className='picker-view'>
+                    <Text className='picker-text'>{deviceStore.currentDevice.indicatorColor || '请选择颜色'}</Text>
+                    <AtIcon value='chevron-down' size='16' color='#999'></AtIcon>
+                  </View>
+                </Picker>
+              </View>
+            </>
+          )}
+        </View>
+      )}
     </View>
   );
 });
