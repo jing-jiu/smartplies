@@ -42,8 +42,26 @@ export class UserStore {
   }
 
   @action
-  setUserLocation(location: UserLocation) {
+  async setUserLocation(location: UserLocation) {
     this.userLocation = location;
+    this.saveUserInfo(); // 自动保存位置信息到本地存储
+    console.log('位置信息已保存到本地存储');
+    console.log(this.hasLoggedIn,this.openid);
+    
+    // 同步到云数据库
+    if (this.hasLoggedIn && this.openid) {
+      try {
+        await Taro.cloud.callFunction({
+          name: 'updateUserInfo',
+          data: {
+            location: location
+          }
+        });
+        console.log('位置信息已同步到云数据库');
+      } catch (error) {
+        console.error('同步位置信息到云数据库失败:', error);
+      }
+    }
   }
 
   // 检查用户登录状态
@@ -55,13 +73,26 @@ export class UserStore {
         data: {}
       });
       
-      if (res.result && (res.result as any).success !== false) {
-        this.setLoggedIn(true);
-        this.setUserInfo(res.result);
-        if ((res.result as any).openid) {
-          this.setOpenId((res.result as any).openid);
+      if (res.result) {
+        const result = res.result as any;
+        console.log(result);
+        
+        if (result.success === true && result.data) {
+          // 用户存在，从data中获取openid和用户信息
+          this.setLoggedIn(true);
+          this.setUserInfo(result.data);
+          if (result.data.openid) {
+            this.setOpenId(result.data.openid);
+          }
+          return true;
+        } else {
+          // 用户不存在但可能有openid，用于注册等操作
+          if (result.openid) {
+            this.setOpenId(result.openid);
+            console.log('用户不存在，openid:', result.openid);
+          }
+          return false;
         }
-        return true;
       }
       return false;
     } catch (error) {
@@ -126,17 +157,7 @@ export class UserStore {
         console.error('获取地址失败:', addressError);
       }
 
-      this.setUserLocation(location);
-      
-      // 上传到云数据库
-      if (this.hasLoggedIn && this.openid) {
-        await Taro.cloud.callFunction({
-          name: 'updateUserInfo',
-          data: {
-            location: location
-          }
-        });
-      }
+      await this.setUserLocation(location);
       
       return location;
     } catch (error: any) {
